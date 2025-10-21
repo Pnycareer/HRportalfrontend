@@ -85,45 +85,89 @@ export default function useAttendance() {
     });
   }
 
+  // async function markOne(userId) {
+  //   const draft = changes[userId];
+  //   if (!draft?.status) return;
+
+  //   const isoDate = toUtcIsoMidnight(date);
+  //   const merged = { ...(persisted[userId] || {}), ...(draft || {}) };
+  //   const ci = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkIn || "");
+  //   const co = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkOut || "");
+
+  //   setSaving(true);
+  //   try {
+  //     const { data } = await api.post("/api/attendance/mark", {
+  //       userId,
+  //       date: isoDate,
+  //       status: merged.status,
+  //       note: merged.note || "",
+  //       checkIn: ci,
+  //       checkOut: co,
+  //     });
+
+  //     setPersisted(prev => ({
+  //       ...prev,
+  //       [userId]: {
+  //         status: data.status,
+  //         note: data.note || "",
+  //         checkIn: OFF.has(data.status) ? "" : isoToHHMM(data.checkIn),
+  //         checkOut: OFF.has(data.status) ? "" : isoToHHMM(data.checkOut),
+  //         workedMinutes: data.workedMinutes ?? null,
+  //       },
+  //     }));
+  //     resetRow(userId);
+  //     toast.success("Marked attendance");
+  //   } catch (e) {
+  //     toast.error(e?.response?.data?.message || e?.message || "Failed to mark");
+  //     throw e;
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // }
+
   async function markOne(userId) {
-    const draft = changes[userId];
-    if (!draft?.status) return;
+  const draft = changes[userId] || {};
+  const current = persisted[userId] || {};
+  const merged = { ...current, ...draft };
 
-    const isoDate = toUtcIsoMidnight(date);
-    const merged = { ...(persisted[userId] || {}), ...(draft || {}) };
-    const ci = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkIn || "");
-    const co = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkOut || "");
+  // require status from merged (works even if it's only in persisted)
+  if (!merged.status) return;
 
-    setSaving(true);
-    try {
-      const { data } = await api.post("/api/attendance/mark", {
-        userId,
-        date: isoDate,
-        status: merged.status,
-        note: merged.note || "",
-        checkIn: ci,
-        checkOut: co,
-      });
+  const isoDate = toUtcIsoMidnight(date);
+  const ci = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkIn || "");
+  const co = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkOut || "");
 
-      setPersisted(prev => ({
-        ...prev,
-        [userId]: {
-          status: data.status,
-          note: data.note || "",
-          checkIn: OFF.has(data.status) ? "" : isoToHHMM(data.checkIn),
-          checkOut: OFF.has(data.status) ? "" : isoToHHMM(data.checkOut),
-          workedMinutes: data.workedMinutes ?? null,
-        },
-      }));
-      resetRow(userId);
-      toast.success("Marked attendance");
-    } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || "Failed to mark");
-      throw e;
-    } finally {
-      setSaving(false);
-    }
+  setSaving(true);
+  try {
+    const { data } = await api.post("/api/attendance/mark", {
+      userId,
+      date: isoDate,
+      status: merged.status,
+      note: merged.note || "",
+      checkIn: ci,
+      checkOut: co,
+    });
+
+    setPersisted(prev => ({
+      ...prev,
+      [userId]: {
+        status: data.status,
+        note: data.note || "",
+        checkIn: OFF.has(data.status) ? "" : isoToHHMM(data.checkIn),
+        checkOut: OFF.has(data.status) ? "" : isoToHHMM(data.checkOut),
+        workedMinutes: data.workedMinutes ?? null,
+      },
+    }));
+    resetRow(userId);
+    toast.success("Marked attendance");
+  } catch (e) {
+    toast.error(e?.response?.data?.message || e?.message || "Failed to mark");
+    throw e;
+  } finally {
+    setSaving(false);
   }
+}
+
 
   async function saveAll() {
     const records = Object.entries(changes)

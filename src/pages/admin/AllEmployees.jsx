@@ -1,4 +1,4 @@
-// src/pages/AllEmployees.jsx
+﻿// src/pages/AllEmployees.jsx
 import React from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { BLOOD_GROUPS } from "@/components/constants/bloodGroups";
 
 const ROLES = ["superadmin", "admin", "hr", "employee"]; // <- add
 
@@ -51,7 +52,14 @@ export default function AllEmployees() {
     department: "",
     joiningDate: "",
     role: "employee",       // <- add
+    designation: "",
+    dutyRoster: "10am to 7pm",
+    officialOffDays: "",
+    bloodGroup: "",
+    contactNumber: "",
   });
+
+  const bloodGroupSelectValue = editForm.bloodGroup || "none";
 
   function openEdit(u) {
     setEditing(u);
@@ -61,6 +69,13 @@ export default function AllEmployees() {
       department: u.department || "",
       joiningDate: u.joiningDate ? String(u.joiningDate).slice(0, 10) : "",
       role: u.role || "employee",     // <- add
+      designation: u.designation || "",
+      dutyRoster: u.dutyRoster || "10am to 7pm",
+      officialOffDays: Array.isArray(u.officialOffDays)
+        ? u.officialOffDays.join(", ")
+        : u.officialOffDays || "",
+      bloodGroup: u.bloodGroup || "",
+      contactNumber: u.contactNumber || "",
     });
     setEditOpen(true);
   }
@@ -75,6 +90,11 @@ export default function AllEmployees() {
         department: editForm.department,
         joiningDate: editForm.joiningDate || null,
         role: editForm.role,                // <- add
+        designation: editForm.designation,
+        dutyRoster: editForm.dutyRoster,
+        officialOffDays: editForm.officialOffDays,
+        bloodGroup: editForm.bloodGroup,
+        contactNumber: editForm.contactNumber,
       });
       toast.success("Employee updated");
       setEditOpen(false);
@@ -150,14 +170,14 @@ export default function AllEmployees() {
 
       {loading ? (
         <div className="rounded-xl border p-6 text-sm text-muted-foreground">
-          Loading…
+          Loadingâ€¦
         </div>
       ) : (
         <EmployeesTable
           rows={filtered}
           onEdit={(u) => openEdit(u)}
           onDelete={(id) => deleteEmployee(id)}
-          // 🚫 remove inline role changes in table
+          // ðŸš« remove inline role changes in table
           // onChangeRole={(u, role) => updateEmployeeRole(u._id, role)}
           onApprove={(u) => setEmployeeApproval(u._id, true)}
           onReject={(u) => setEmployeeApproval(u._id, false)}
@@ -216,7 +236,18 @@ export default function AllEmployees() {
               </Select>
             </div>
 
-            {/* 🔥 Role moved into modal */}
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium">Designation</label>
+              <Input
+                value={editForm.designation || ""}
+                onChange={(e) =>
+                  setEditForm((s) => ({ ...s, designation: e.target.value }))
+                }
+                placeholder="e.g. Senior Developer"
+              />
+            </div>
+
+            {/* Role selection within modal */}
             <div className="md:col-span-2">
               <label className="text-sm font-medium">Role</label>
               <Select
@@ -238,6 +269,18 @@ export default function AllEmployees() {
               </Select>
             </div>
 
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium">Contact Number</label>
+              <Input
+                type="tel"
+                value={editForm.contactNumber || ""}
+                onChange={(e) =>
+                  setEditForm((s) => ({ ...s, contactNumber: e.target.value }))
+                }
+                placeholder="e.g. 0300-1234567"
+              />
+            </div>
+
             <div>
               <label className="text-sm font-medium">Joining Date</label>
               <Input
@@ -248,6 +291,56 @@ export default function AllEmployees() {
                 }
               />
             </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium">Duty Roster</label>
+              <Input
+                value={editForm.dutyRoster || ""}
+                onChange={(e) =>
+                  setEditForm((s) => ({ ...s, dutyRoster: e.target.value }))
+                }
+                placeholder="10am to 7pm"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Blood Group</label>
+              <Select
+                value={bloodGroupSelectValue}
+                onValueChange={(val) =>
+                  setEditForm((s) => ({
+                    ...s,
+                    bloodGroup: val === "none" ? "" : val,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select blood group" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not set</SelectItem>
+                  {BLOOD_GROUPS.map((group) => (
+                    <SelectItem key={group} value={group}>
+                      {group}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium">Official Off Days</label>
+              <Input
+                value={editForm.officialOffDays || ""}
+                onChange={(e) =>
+                  setEditForm((s) => ({ ...s, officialOffDays: e.target.value }))
+                }
+                placeholder="Sunday, Saturday"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Separate multiple days with commas.
+              </p>
+            </div>
           </div>
 
           <DialogFooter>
@@ -255,7 +348,7 @@ export default function AllEmployees() {
               Cancel
             </Button>
             <Button onClick={saveEdit} disabled={editSaving}>
-              {editSaving ? "Saving…" : "Save"}
+              {editSaving ? "Savingâ€¦" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -263,3 +356,5 @@ export default function AllEmployees() {
     </div>
   );
 }
+
+

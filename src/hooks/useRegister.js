@@ -7,11 +7,16 @@ const INITIAL = {
   cnic: '',
   email: '',
   department: '',
+  designation: '',
   joiningDate: '',
   password: '',
   branch: '',
   city: '',
   avatar: null, // File object
+  dutyRoster: '10am to 7pm',
+  officialOffDays: '',
+  bloodGroup: '',
+  contactNumber: '',
 };
 
 /**

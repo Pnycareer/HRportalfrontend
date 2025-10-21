@@ -7,7 +7,7 @@ import { toast } from "sonner";
  * - Fetches users (employees)
  * - Branch-aware filtering (branch -> department -> search)
  * - Builds branch list and branch-scoped department list
- * - Admin actions: approve/reject via single update, delete, edit, role
+ * - Admin actions: approve/reject via single update, delete, edit, role, salary
  */
 export default function useEmployees() {
   const [employees, setEmployees] = React.useState([]);
@@ -24,44 +24,45 @@ export default function useEmployees() {
 
   const [loading, setLoading] = React.useState(true);
 
+  // normalize server payloads from /edit/:id (user.id -> _id)
+  function normalizeServerUser(u) {
+    if (!u) return u;
+    const _id = u._id || u.id;
+    return { ...u, _id };
+  }
+
+  // local patch helper
+  function patchLocal(id, patch) {
+    setEmployees((prev) => prev.map((u) => (u._id === id ? { ...u, ...patch } : u)));
+    setFiltered((prev) => prev.map((u) => (u._id === id ? { ...u, ...patch } : u)));
+  }
+
   // fetch users
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await api.get("/api/users");
-      const list = data || [];
+      const list = Array.isArray(data) ? data.map(normalizeServerUser) : [];
       setEmployees(list);
       setFiltered(list);
 
       // build branches (case-insensitive), sorted
       const uniqueBranches = Array.from(
-        new Set(
-          list
-            .map((u) => (u.branch || "").trim().toLowerCase())
-            .filter(Boolean)
-        )
+        new Set(list.map((u) => (u.branch || "").trim().toLowerCase()).filter(Boolean))
       )
         .map((b) => b.charAt(0).toUpperCase() + b.slice(1))
         .sort((a, b) => a.localeCompare(b));
-
       setBranches(["all", ...uniqueBranches]);
 
       // initial departments = all departments across all branches
       const uniqueDepts = Array.from(
-        new Set(
-          list
-            .map((u) => (u.department || "").trim().toLowerCase())
-            .filter(Boolean)
-        )
+        new Set(list.map((u) => (u.department || "").trim().toLowerCase()).filter(Boolean))
       )
         .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
         .sort((a, b) => a.localeCompare(b));
-
       setDepartments(["all", ...uniqueDepts]);
     } catch (err) {
-      toast.error(
-        err?.response?.data?.message || err?.message || "Failed to fetch employees"
-      );
+      toast.error(err?.response?.data?.message || err?.message || "Failed to fetch employees");
     } finally {
       setLoading(false);
     }
@@ -69,13 +70,9 @@ export default function useEmployees() {
 
   // initial load
   React.useEffect(() => {
-    let mounted = true;
     (async () => {
       await load();
     })();
-    return () => {
-      mounted = false;
-    };
   }, [load]);
 
   // when branch changes, recompute departments limited to that branch
@@ -88,11 +85,7 @@ export default function useEmployees() {
           );
 
     const branchDepts = Array.from(
-      new Set(
-        pool
-          .map((u) => (u.department || "").trim().toLowerCase())
-          .filter(Boolean)
-      )
+      new Set(pool.map((u) => (u.department || "").trim().toLowerCase()).filter(Boolean))
     )
       .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
       .sort((a, b) => a.localeCompare(b));
@@ -114,14 +107,12 @@ export default function useEmployees() {
         branch === "all"
           ? true
           : String(u.branch || "").toLowerCase() === branch.toLowerCase();
-
       if (!matchesBranch) return false;
 
       const matchesDept =
         dept === "all"
           ? true
           : String(u.department || "").toLowerCase() === dept.toLowerCase();
-
       if (!matchesDept) return false;
 
       if (!s) return true;
@@ -137,22 +128,17 @@ export default function useEmployees() {
   }, [q, branch, dept, employees]);
 
   // ===== Admin actions (employee=user) =====
-  function patchLocal(id, patch) {
-    setEmployees((prev) => prev.map((u) => (u._id === id ? { ...u, ...patch } : u)));
-    setFiltered((prev) => prev.map((u) => (u._id === id ? { ...u, ...patch } : u)));
-  }
-
   async function setEmployeeApproval(id, isApproved) {
     const before = employees.find((u) => u._id === id);
     patchLocal(id, { isApproved });
     try {
-      await api.patch(`/api/users/edit/${id}`, { isApproved });
+      const { data } = await api.patch(`/api/users/edit/${id}`, { isApproved });
+      const srv = normalizeServerUser(data?.user);
+      if (srv) patchLocal(id, srv);
       toast.success(isApproved ? "Approved" : "Rejected");
     } catch (err) {
       patchLocal(id, { isApproved: before?.isApproved ?? false });
-      toast.error(
-        err?.response?.data?.message || err?.message || "Failed to update approval"
-      );
+      toast.error(err?.response?.data?.message || err?.message || "Failed to update approval");
     }
   }
 
@@ -172,10 +158,12 @@ export default function useEmployees() {
 
   async function updateEmployee(id, payload) {
     const before = employees.find((u) => u._id === id);
+    // optimistic
     patchLocal(id, payload);
     try {
-      const { data } = await api.patch(`/api/users/${id}`, payload);
-      patchLocal(id, data?.user || data || payload);
+      const { data } = await api.patch(`/api/users/edit/${id}`, payload);
+      const srv = normalizeServerUser(data?.user) || payload;
+      patchLocal(id, srv);
       toast.success("Updated");
     } catch (err) {
       if (before) patchLocal(id, before);
@@ -188,11 +176,42 @@ export default function useEmployees() {
     const before = employees.find((u) => u._id === id);
     patchLocal(id, { role });
     try {
-      await api.patch(`/api/users/${id}/role`, { role });
+      const { data } = await api.patch(`/api/users/edit/${id}`, { role });
+      const srv = normalizeServerUser(data?.user);
+      if (srv) patchLocal(id, srv);
       toast.success("Role updated");
     } catch (err) {
       patchLocal(id, { role: before?.role || "employee" });
       toast.error(err?.response?.data?.message || err?.message || "Failed to update role");
+    }
+  }
+
+  // 👇 NEW: update salary (number or null to clear)
+  async function updateEmployeeSalary(id, salary) {
+    // accept number | string | null | ""
+    let num = null;
+    if (salary !== null && salary !== "") {
+      const n = Number(salary);
+      if (!Number.isFinite(n) || n < 0) {
+        toast.error("Salary must be a non-negative number (or leave blank to clear).");
+        throw new Error("invalid-salary");
+      }
+      // normalize to 2dp
+      num = Math.round(n * 100) / 100;
+    }
+
+    const before = employees.find((u) => u._id === id);
+    patchLocal(id, { salary: num });
+    try {
+      const { data } = await api.patch(`/api/users/edit/${id}`, { salary: num });
+      const srv = normalizeServerUser(data?.user);
+      if (srv) patchLocal(id, srv);
+      toast.success("Salary updated");
+    } catch (err) {
+      // revert
+      patchLocal(id, { salary: before?.salary ?? null });
+      toast.error(err?.response?.data?.message || err?.message || "Failed to update salary");
+      throw err;
     }
   }
 
@@ -218,5 +237,6 @@ export default function useEmployees() {
     updateEmployee,
     updateEmployeeRole,
     setEmployeeApproval,
+    updateEmployeeSalary, // 👈 expose it
   };
 }

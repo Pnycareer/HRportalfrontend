@@ -1,3 +1,4 @@
+// MyAttendance.jsx
 import React from "react";
 import useMyAttendance from "@/hooks/useMyAttendance";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -40,6 +41,7 @@ const MONTHS = [
   { n: 12, label: "Dec" }
 ];
 
+// Add visual meta for the new status too
 const STAT_META = {
   present: {
     helper: "Checked-in and on time",
@@ -76,6 +78,12 @@ const STAT_META = {
     icon: CalendarCog,
     gradient: "from-purple-500/20 via-purple-500/5 to-transparent",
     iconColor: "text-purple-400"
+  },
+  public_holiday: {
+    helper: "National/observed holidays (paid)",
+    icon: CalendarCog,
+    gradient: "from-cyan-500/20 via-cyan-500/5 to-transparent",
+    iconColor: "text-cyan-400"
   }
 };
 
@@ -83,48 +91,40 @@ const PAGE_SIZE = 10;
 
 function formatDate(isoLike) {
   const date = new Date(isoLike);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit"
-  });
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
 }
-
 function formatDayName(isoLike) {
   const date = new Date(isoLike);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return date.toLocaleDateString(undefined, {
-    weekday: "short"
-  });
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString(undefined, { weekday: "short" });
 }
 
 export default function MyAttendance() {
-  const { year, month, setYear, setMonth, loading, error, days, stats } = useMyAttendance();
+  const { year, month, setYear, setMonth, loading, error, days, stats, paidDays } = useMyAttendance();
 
   const activeMonth = React.useMemo(() => MONTHS.find((m) => m.n === month), [month]);
+
+  // Prefer rendering any key present in stats; fall back to ORDER and ensure public_holiday is shown
+  const DISPLAY_ORDER = React.useMemo(() => {
+    const keys = Object.keys(stats || {});
+    if (keys.length) {
+      const set = new Set(ORDER.concat(keys.filter((k) => !ORDER.includes(k))));
+      return Array.from(set);
+    }
+    return ORDER.includes("public_holiday") ? ORDER : ORDER.concat("public_holiday");
+  }, [stats]);
+
   const trackedTotal = React.useMemo(
-    () => ORDER.reduce((total, key) => total + (stats?.[key] ?? 0), 0),
+    () => (stats ? Object.values(stats).reduce((a, b) => a + (b || 0), 0) : 0),
     [stats]
   );
-  const presenceRate =
-    trackedTotal > 0 ? Math.round(((stats?.present ?? 0) / trackedTotal) * 100) : null;
+  const presenceRate = trackedTotal > 0 ? Math.round(((stats?.present ?? 0) / trackedTotal) * 100) : null;
 
   const periodLabel = `${activeMonth?.label ?? "Month"} ${year}`;
   const sortedDays = React.useMemo(() => {
     if (!days || days.length === 0) return [];
-    return [...days].sort((a, b) => {
-      const aTime = new Date(a.date).getTime();
-      const bTime = new Date(b.date).getTime();
-      if (Number.isNaN(aTime) || Number.isNaN(bTime)) return 0;
-      return bTime - aTime;
-    });
+    return [...days].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [days]);
   const latestEntry = sortedDays[0];
   const earliestEntry = sortedDays.length > 1 ? sortedDays[sortedDays.length - 1] : sortedDays[0];
@@ -132,7 +132,7 @@ export default function MyAttendance() {
     if (!stats) return null;
     let winningKey = null;
     let winningValue = 0;
-    ORDER.forEach((key) => {
+    Object.keys(stats).forEach((key) => {
       const value = stats[key] ?? 0;
       if (value > winningValue) {
         winningKey = key;
@@ -142,11 +142,16 @@ export default function MyAttendance() {
     return winningKey ? { key: winningKey, count: winningValue } : null;
   }, [stats]);
   const dominantMeta = dominantStatus ? STAT_META[dominantStatus.key] ?? null : null;
-  const dominantLabel = dominantStatus ? LABELS[dominantStatus.key] ?? dominantStatus.key : null;
-  const latestStatusLabel = latestEntry ? LABELS[latestEntry.status] ?? latestEntry.status : null;
+  const dominantLabel =
+    dominantStatus ? (LABELS[dominantStatus.key] ?? dominantStatus.key.replace(/_/g, " ")) : null;
+  const latestStatusLabel = latestEntry
+    ? LABELS[latestEntry.status] ?? latestEntry.status.replace(/_/g, " ")
+    : null;
   const latestStatusMeta = latestEntry ? STAT_META[latestEntry.status] ?? null : null;
   const earliestStatusMeta = earliestEntry ? STAT_META[earliestEntry.status] ?? null : null;
-  const earliestStatusLabel = earliestEntry ? LABELS[earliestEntry.status] ?? earliestEntry.status : null;
+  const earliestStatusLabel = earliestEntry
+    ? LABELS[earliestEntry.status] ?? earliestEntry.status.replace(/_/g, " ")
+    : null;
   const DominantIcon = dominantMeta?.icon ?? BadgeInfo;
   const LatestIcon = latestStatusMeta?.icon ?? BadgeInfo;
   const EarliestIcon = earliestStatusMeta?.icon ?? BadgeInfo;
@@ -160,16 +165,11 @@ export default function MyAttendance() {
   }, [year, month]);
 
   React.useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
+    if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
   const pageStartIndex = (currentPage - 1) * PAGE_SIZE;
-  const paginatedDays =
-    totalEntries === 0 ? [] : days.slice(pageStartIndex, pageStartIndex + PAGE_SIZE);
-  const startEntryOnPage = totalEntries === 0 ? 0 : pageStartIndex + 1;
-  const endEntryOnPage = totalEntries === 0 ? 0 : pageStartIndex + paginatedDays.length;
+  const paginatedDays = totalEntries === 0 ? [] : days.slice(pageStartIndex, pageStartIndex + PAGE_SIZE);
 
   return (
     <div className="relative space-y-6">
@@ -242,13 +242,17 @@ export default function MyAttendance() {
                   ? `${trackedTotal} tracked day${trackedTotal === 1 ? "" : "s"} this period`
                   : "Switch months to review previous activity"}
               </span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-400">
+                <CalendarCog className="h-3.5 w-3.5" />
+                {typeof paidDays === "number" ? `${paidDays} paid day${paidDays === 1 ? "" : "s"}` : "—"}
+              </span>
             </div>
           </div>
         </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {ORDER.map((key) => {
+        {DISPLAY_ORDER.map((key) => {
           const meta = STAT_META[key] ?? {
             helper: "Attendance insight",
             icon: BadgeInfo,
@@ -267,7 +271,7 @@ export default function MyAttendance() {
               <div className="relative z-10 flex items-start justify-between gap-4">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {LABELS[key]}
+                    {LABELS[key] ?? key.replace(/_/g, " ")}
                   </p>
                   <p className="text-3xl font-semibold text-foreground">{value}</p>
                   <p className="text-xs text-muted-foreground">{meta.helper}</p>
@@ -293,30 +297,27 @@ export default function MyAttendance() {
               Daily Overview
             </p>
             <h2 className="text-xl font-semibold text-foreground sm:text-2xl">Attendance ledger</h2>
-            <p className="text-sm text-muted-foreground">
-              Detailed activity log for {periodLabel}
-            </p>
+            <p className="text-sm text-muted-foreground">Detailed activity log for {periodLabel}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-background/70 px-3 py-2 text-foreground shadow-sm backdrop-blur">
               <span className="h-2 w-2 rounded-full bg-primary" />
-              {trackedTotal > 0
-                ? `${trackedTotal} tracked day${trackedTotal === 1 ? "" : "s"}`
-                : "No tracked days yet"}
+              {trackedTotal > 0 ? `${trackedTotal} tracked day${trackedTotal === 1 ? "" : "s"}` : "No tracked days yet"}
             </span>
             <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/15 px-3 py-2 font-medium text-primary shadow-sm backdrop-blur">
               <Sparkles className="h-3 w-3" />
               {presenceRate !== null ? `${presenceRate}% presence` : "Awaiting records"}
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 font-medium text-cyan-400 shadow-sm backdrop-blur">
+              <CalendarCog className="h-3 w-3" />
+              {typeof paidDays === "number" ? `${paidDays} paid` : "—"}
             </span>
           </div>
         </div>
         {loading ? (
           <div className="space-y-3 p-6">
             {range(6).map((row) => (
-              <div
-                key={row}
-                className="h-12 rounded-2xl border border-dashed border-white/10 bg-white/5 animate-pulse"
-              />
+              <div key={row} className="h-12 rounded-2xl border border-dashed border-white/10 bg-white/5 animate-pulse" />
             ))}
           </div>
         ) : error ? (
@@ -341,7 +342,7 @@ export default function MyAttendance() {
                     </TableRow>
                   ) : (
                     paginatedDays.map((day, index) => {
-                      const statusLabel = LABELS[day.status] ?? day.status;
+                      const statusLabel = LABELS[day.status] ?? day.status.replace(/_/g, " ");
                       const pillClasses = CHIP[day.status] ?? "border-foreground/20 text-foreground";
                       const meta =
                         STAT_META[day.status] ?? {

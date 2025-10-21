@@ -11,6 +11,7 @@ import TeamLeadApprovals from "@/pages/employee/TeamLeadApprovals";
 import LeaveReports from "@/pages/employee/LeaveReports";
 import UserMonthlyReport from "@/pages/reports/UserMonthlyReport";
 import ProfileCard from "@/pages/employee/ProfileCard";
+import InstructorOvertime from "@/pages/employee/InstructorOvertime";
 
 const employeeRoutes = [
   {
@@ -25,6 +26,7 @@ const employeeRoutes = [
           { path: "leave-report", element: <LeaveReports /> },
           { path: "user-monthly", element: <UserMonthlyReport/> },
           { path: "employee-card", element: <ProfileCard/> },
+          { path: "instructor-overtime", element: <InstructorOvertime /> },
         ],
       },
     ],

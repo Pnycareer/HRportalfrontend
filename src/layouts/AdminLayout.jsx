@@ -4,15 +4,37 @@ import {
   Sheet, SheetTrigger, SheetContent,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, Menu, Settings, Search } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
 import Sidebar from "@/components/sidebar/AdminSidebar";
 
+const STORAGE_KEY = "adminSidebarCollapsed";
+
 export default function AdminLayout() {
+  const [collapsed, setCollapsed] = React.useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  React.useEffect(() => {
+    function handler(e) {
+      if (e?.detail && typeof e.detail.collapsed === "boolean") {
+        setCollapsed(e.detail.collapsed);
+      }
+    }
+    window.addEventListener("admin:sidebar-collapsed", handler);
+    return () => window.removeEventListener("admin:sidebar-collapsed", handler);
+  }, []);
+
+  // desktop left padding to avoid overlap with fixed sidebar
+  const desktopPaddingClass = collapsed ? "md:pl-16" : "md:pl-72";
+
   return (
     <div className="min-h-screen bg-muted/40">
       {/* desktop sidebar */}
@@ -20,7 +42,7 @@ export default function AdminLayout() {
         <Sidebar />
       </div>
 
-      {/* mobile sidebar (sheet) */}
+      {/* mobile top bar + sidebar sheet */}
       <Sheet>
         <div className="md:hidden sticky top-0 z-50 bg-background border-b">
           <div className="flex items-center gap-2 p-3">
@@ -39,43 +61,20 @@ export default function AdminLayout() {
           </div>
         </div>
         <SheetContent side="left" className="p-0 w-72">
+          {/* mobile sidebar always full width inside sheet */}
           <Sidebar />
         </SheetContent>
       </Sheet>
 
       {/* content */}
-      <div className="md:pl-72">
-        {/* <Topbar /> */}
-        <main className="p-6">
+      <div className={desktopPaddingClass}>
+        <main className="p-2">
           <Outlet />
         </main>
       </div>
     </div>
   );
 }
-
-// function Topbar() {
-//   return (
-//     <div className="sticky top-0 z-40 bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-//       <div className="flex items-center gap-3 p-4">
-//         <div className="relative flex-1 max-w-xl">
-//           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-//           <Input placeholder="Search…" className="pl-9" />
-//         </div>
-//         <div className="hidden sm:flex items-center gap-2">
-//           <Button variant="outline" size="sm">Download</Button>
-//           <Button variant="ghost" size="icon" aria-label="Notifications">
-//             <Bell className="h-5 w-5" />
-//           </Button>
-//           <Button variant="ghost" size="icon" aria-label="Settings">
-//             <Settings className="h-5 w-5" />
-//           </Button>
-//           <UserMenu />
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
 
 function UserMenu() {
   return (

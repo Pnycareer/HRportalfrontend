@@ -5,6 +5,7 @@ export const STATUSES = [
   "late",
   "official_off",
   "short_leave",
+  "public_holiday",
 ];
 
 export const LABELS = {
@@ -14,6 +15,7 @@ export const LABELS = {
   late: "Late",
   official_off: "Official Off",
   short_leave: "Short Leave",
+  public_holiday: "public_holiday",
 };
 
 export const ORDER = [

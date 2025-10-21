@@ -47,13 +47,15 @@ export default function MarkAttendance() {
     branch, setBranch, branches,
     dept, setDept, departments,
     reload,
+    updateEmployee,          // ✅ used by Duty/OffDays/Salary modals
+    updateEmployeeSalary,    // ✅ optional; AttendanceTable can use onUpdateEmployee only, but passing this too is harmless
   } = useEmployees();
 
   const {
     date,
     setDate,
     changes,
-    setRowChange,   // merges per-id fields into `changes`
+    setRowChange,
     resetRow,
     markOne,
     saveAll,
@@ -73,7 +75,6 @@ export default function MarkAttendance() {
 
   const handleCheckInChange = React.useCallback((id, hhmm) => {
     setRowChange(id, { checkIn: hhmm });
-
     if (!hhmm) return;
 
     if (isAtOrAfterSixthLateMinute(hhmm)) {
@@ -192,6 +193,9 @@ export default function MarkAttendance() {
           onCheckInChange={handleCheckInChange}
           onCheckOutChange={(id, checkOut) => setRowChange(id, { checkOut })}
           onMark={async (id) => { try { await markOne(id); } catch {} }}
+          dateYmd={date}
+          onUpdateEmployee={updateEmployee}                
+          onUpdateEmployeeSalary={updateEmployeeSalary}     
         />
       )}
 

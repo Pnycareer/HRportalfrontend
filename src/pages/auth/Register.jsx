@@ -1,12 +1,8 @@
+// app/(wherever)/Register.jsx
 import React from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
 import useRegister from "@/hooks/useRegister";
@@ -17,6 +13,21 @@ import OtpModal from "@/components/auth/OtpModal";
 import AvatarUploader from "@/components/form/AvatarUploader";
 import { CITIES, getBranchesForCity } from "@/components/constants/locations";
 import { DEPARTMENTS } from "@/components/constants/departments";
+import { BLOOD_GROUPS } from "@/components/constants/bloodGroups";
+
+// Shared modals (same components used by AttendanceTable)
+import DutyRosterModal from "@/components/models/DutyRosterModal";
+import OffDaysModal from "@/components/models/OffDaysModal";
+
+const DESIGNATIONS = [
+  "Developer",
+  "Branch Manager",
+  "Office Executive",
+  "Accountant",
+  "Receptionist",
+  "CSR",
+  "Office Boy",
+];
 
 export default function Register() {
   const [otpOpen, setOtpOpen] = React.useState(false);
@@ -32,6 +43,7 @@ export default function Register() {
   });
 
   const branches = React.useMemo(() => getBranchesForCity(form.city), [form.city]);
+  const bloodGroupSelectValue = form.bloodGroup || "none";
 
   function handleCityChange(val) {
     setForm((s) => {
@@ -42,18 +54,49 @@ export default function Register() {
     });
   }
 
+  // Shared modals state
+  const [dutyOpen, setDutyOpen] = React.useState(false);
+  const [offOpen, setOffOpen] = React.useState(false);
+
+  const offDaysArray = React.useMemo(() => {
+    if (!form.officialOffDays) return [];
+    if (Array.isArray(form.officialOffDays)) return form.officialOffDays;
+    return String(form.officialOffDays)
+      .split(",")
+      .map((d) => d.trim())
+      .filter(Boolean);
+  }, [form.officialOffDays]);
+
   return (
     <>
       <OtpModal open={otpOpen} onOpenChange={setOtpOpen} email={otpEmail} />
+
+      {/* Shared Modals */}
+      <DutyRosterModal
+        open={dutyOpen}
+        onOpenChange={setDutyOpen}
+        title="Duty roster"
+        initialRoster={form.dutyRoster}
+        onSave={(roster) => setForm((s) => ({ ...s, dutyRoster: roster }))}
+      />
+      <OffDaysModal
+        open={offOpen}
+        onOpenChange={setOffOpen}
+        title="Official off days"
+        initialDays={offDaysArray}
+        onSave={(days) => setForm((s) => ({ ...s, officialOffDays: days }))}
+      />
 
       <div className="relative min-h-screen w-full overflow-hidden bg-slate-950">
         <div className="absolute inset-0 -z-10 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900" />
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(94,234,212,0.18),_transparent_60%)]" />
         <div className="absolute -bottom-36 -left-24 -z-10 h-[28rem] w-[28rem] rounded-full bg-primary/35 blur-3xl" aria-hidden="true" />
         <div className="absolute -top-40 -right-28 -z-10 h-[24rem] w-[24rem] rounded-full bg-secondary/25 blur-3xl" aria-hidden="true" />
+
         <div className="relative z-10">
           <div className="container flex min-h-screen items-center justify-center py-16">
             <div className="mx-auto grid w-full max-w-6xl gap-12 rounded-[2.75rem] border border-white/10 bg-white/10 p-6 shadow-2xl backdrop-blur-3xl sm:p-10 lg:grid-cols-[1.05fr_1.2fr]">
+              {/* ==== LEFT COLUMN (your original content) ==== */}
               <div className="hidden min-h-full flex-col justify-between space-y-10 text-white lg:flex">
                 <div className="space-y-6">
                   <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]">
@@ -99,9 +142,13 @@ export default function Register() {
                   Need help? Contact the people team at <span className="font-semibold text-white">hr-support@company.com</span>.
                 </div>
               </div>
+
+              {/* ==== RIGHT COLUMN (form) ==== */}
               <Card className="border-white/10 bg-white/95 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/85">
                 <CardHeader className="space-y-3">
-                  <CardTitle className="text-3xl font-semibold text-slate-900 dark:text-white">Create your account</CardTitle>
+                  <CardTitle className="text-3xl font-semibold text-slate-900 dark:text-white">
+                    Create your account
+                  </CardTitle>
                   <CardDescription className="text-sm text-slate-600 dark:text-slate-300">
                     Employees only. Use your work email and wait for superadmin approval once your profile is verified.
                   </CardDescription>
@@ -168,6 +215,21 @@ export default function Register() {
                     </SelectField>
 
                     <SelectField
+                      label="Designation"
+                      name="designation"
+                      value={form.designation}
+                      onValueChange={(val) => setForm((s) => ({ ...s, designation: val }))}
+                      placeholder="Select designation"
+                      containerClassName="space-y-1"
+                    >
+                      {DESIGNATIONS.map((d) => (
+                        <SelectItem key={`des-${d}`} value={d}>
+                          {d}
+                        </SelectItem>
+                      ))}
+                    </SelectField>
+
+                    <SelectField
                       label="City"
                       name="city"
                       value={form.city}
@@ -205,6 +267,18 @@ export default function Register() {
                     </SelectField>
 
                     <InputField
+                      label="Contact Number"
+                      name="contactNumber"
+                      type="tel"
+                      placeholder="e.g. 0300-1234567"
+                      value={form.contactNumber}
+                      onChange={update}
+                      required
+                      containerClassName="space-y-1"
+                      autoComplete="tel"
+                    />
+
+                    <InputField
                       label="Joining Date"
                       name="joiningDate"
                       type="date"
@@ -213,6 +287,76 @@ export default function Register() {
                       required
                       containerClassName="space-y-1"
                     />
+
+                    {/* Duty roster trigger (modal) */}
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                        Duty Roster
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3">
+                        <div className="text-sm font-medium">
+                          {form.dutyRoster || "—"}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDutyOpen(true)}
+                        >
+                          {form.dutyRoster ? "Edit" : "Set Duty"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Official Off Days trigger (modal) */}
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                        Official Off Days
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2 rounded-xl border p-3">
+                        <div className="flex flex-wrap gap-1">
+                          {offDaysArray.length ? (
+                            offDaysArray.map((d) => (
+                              <span key={d} className="rounded-md border px-2 py-0.5 text-xs">
+                                {d.slice(0, 3)}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setOffOpen(true)}
+                        >
+                          {offDaysArray.length ? "Edit" : "Set Off Days"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* FULL-WIDTH Blood Group select */}
+                    <SelectField
+                      label="Blood Group"
+                      name="bloodGroup"
+                      value={bloodGroupSelectValue}
+                      onValueChange={(val) =>
+                        setForm((s) => ({
+                          ...s,
+                          bloodGroup: val === "none" ? "" : val,
+                        }))
+                      }
+                      placeholder="Select blood group (optional)"
+                      containerClassName="md:col-span-2 space-y-1"
+                    >
+                      <SelectItem value="none">Not set</SelectItem>
+                      {BLOOD_GROUPS.map((group) => (
+                        <SelectItem key={group} value={group}>
+                          {group}
+                        </SelectItem>
+                      ))}
+                    </SelectField>
 
                     <InputField
                       label="Password"
@@ -249,7 +393,9 @@ export default function Register() {
                 </CardContent>
 
                 <CardFooter className="flex flex-col items-center justify-between gap-3 border-t border-slate-200/70 bg-slate-50/50 py-6 text-center text-sm text-slate-600 dark:border-white/10 dark:bg-slate-900/40 dark:text-slate-300">
-                  <p>Already registered? Ask the superadmin to approve, then log in with your new credentials.</p>
+                  <p>
+                    Already registered? Ask the superadmin to approve, then log in with your new credentials.
+                  </p>
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                     Secure workspace onboarding
                   </p>

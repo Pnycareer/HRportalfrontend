@@ -7,6 +7,7 @@ import MarkAttendance from "@/pages/admin/MarkAttendance";
 import MonthlyBranchReport from "@/pages/reports/MonthlyBranchReport";
 import LeaveApprovals from "@/pages/admin/LeaveApprovals";
 import LeaveReports from "@/pages/admin/LeaveReports";
+import InstructorOvertime from "@/pages/admin/InstructorOvertime";
 
 const adminRoutes = [
   {
@@ -21,7 +22,8 @@ const adminRoutes = [
           { path:paths.MARK_ATTENDANCE,  element: <MarkAttendance/> },
           { path: paths.LEAVE_REQUESTS, element: <LeaveApprovals /> },
           { path: "leave-report", element: <LeaveReports /> },
-          { path:'monthly-report',  element: <MonthlyBranchReport/> },
+          { path: "monthly-report", element: <MonthlyBranchReport /> },
+          { path: paths.INSTRUCTOR_OVERTIME, element: <InstructorOvertime /> },
         ],
       },
     ],

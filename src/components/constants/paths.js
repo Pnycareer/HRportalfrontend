@@ -10,4 +10,5 @@ export const paths = {
   USERS: "users",
   MARK_ATTENDANCE: "mark-attendance",
   LEAVE_REQUESTS: "leaves",
+  INSTRUCTOR_OVERTIME: "instructor-overtime",
 };

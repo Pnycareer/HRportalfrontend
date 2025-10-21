@@ -90,6 +90,7 @@ const BASE_NAV = [
   { href: "/employee", label: "My Attendance", icon: CalendarCheck2 },
   { href: "/employee/leaves", label: "Leave Centre", icon: NotebookPen },
   { href: "/employee/leave-report", label: "Leave Reports", icon: FileText },
+  { href: "/employee/instructor-overtime", label: "Instructor Overtime", icon: Clock3 },
 ];
 
 const QUICK_METRICS = [
