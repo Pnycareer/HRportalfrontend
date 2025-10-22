@@ -52,13 +52,25 @@ function hhmmTo12hLabel(hhmm) {
 
 function formatClockLabel(value) {
   if (!value) return "--";
+
+  // If it's "HH:mm", keep using the local 12h label logic
   if (typeof value === "string" && /^\d{1,2}:\d{2}$/.test(value)) {
     return hhmmTo12hLabel(value);
   }
+
+  // Try parsing as a date (ISO string, timestamp, etc.)
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "--";
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
+
+  // If the string looks timezone-aware (ends with Z or has an offset),
+  // render it in UTC to avoid local-time shifting.
+  const isTZAware =
+    typeof value === "string" && (/Z$/.test(value) || /[+-]\d{2}:\d{2}$/.test(value));
+
+  const opts = { hour: "numeric", minute: "2-digit", hour12: true };
+  return date.toLocaleTimeString([], isTZAware ? { ...opts, timeZone: "UTC" } : opts);
 }
+
 
 function formatDateLabel(value) {
   if (!value) return "--";
