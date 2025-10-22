@@ -30,19 +30,32 @@ function formatDateLabel(value) {
   });
 }
 
+/**
+ * TIMEZONE-SAFE time label
+ * - If value is an ISO string with "Z" or a "+hh:mm" offset, render in UTC.
+ * - Otherwise render in local time.
+ */
+function formatClockLabel(value) {
+  if (!value) return "--";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "--";
+
+  const looksTZAware =
+    typeof value === "string" && (/Z$/.test(value) || /[+-]\d{2}:\d{2}$/.test(value));
+
+  const opts = { hour: "numeric", minute: "2-digit", hour12: true };
+  return d.toLocaleTimeString([], looksTZAware ? { ...opts, timeZone: "UTC" } : opts);
+}
+
 function formatTimeRange(slot) {
   if (!slot?.from || !slot?.to) return "--";
   const from = new Date(slot.from);
   const to = new Date(slot.to);
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return "--";
-  const formatter = new Intl.DateTimeFormat([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${formatter.format(from)} -> ${formatter.format(to)} (${minutesToHuman(
-    Number(slot.durationMinutes)
-  )})`;
+
+  const label = `${formatClockLabel(slot.from)} -> ${formatClockLabel(slot.to)}`;
+  const mins = Number(slot.durationMinutes);
+  return Number.isFinite(mins) ? `${label} (${minutesToHuman(mins)})` : label;
 }
 
 function getDaysInMonthFromDate(dateLike) {
@@ -71,12 +84,7 @@ function calcOvertimePayout(claim) {
   const monthly = monthlyFromClaim ?? monthlyFromProfile;
   const minutes = numberOrNull(claim?.totalDurationMinutes);
   const days = getDaysInMonthFromDate(claim?.date);
-  if (
-    monthly === null ||
-    minutes === null ||
-    !Number.isFinite(days) ||
-    days <= 0
-  ) {
+  if (monthly === null || minutes === null || !Number.isFinite(days) || days <= 0) {
     return null;
   }
   const perMinute = monthly / days / 9 / 60;
@@ -84,9 +92,9 @@ function calcOvertimePayout(claim) {
 }
 // -----------------------------------------------------------------------------
 
+
 export default function AdminInstructorOvertime() {
-  const { claims, loading, saving, fetchClaims, updateClaim } =
-    useInstructorOvertime();
+  const { claims, loading, saving, fetchClaims, updateClaim } = useInstructorOvertime();
 
   // filters: date + instructor
   const [filters, setFilters] = React.useState({ date: "", instructorId: "" });
@@ -140,7 +148,6 @@ export default function AdminInstructorOvertime() {
   }, [claims]);
 
   const verifyRow = async (claim) => {
-    // server enforces admin-only; UI just calls patch
     try {
       await updateClaim(claim._id, { verified: true });
     } catch {}
@@ -149,12 +156,8 @@ export default function AdminInstructorOvertime() {
   return (
     <div className="space-y-8">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold text-foreground">
-          Instructor Overtime Claims
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Review, verify, and see payouts.
-        </p>
+        <h1 className="text-2xl font-semibold text-foreground">Instructor Overtime Claims</h1>
+        <p className="text-sm text-muted-foreground">Review, verify, and see payouts.</p>
       </header>
 
       <section className="space-y-4 rounded-xl border p-4 md:p-6">
@@ -216,12 +219,8 @@ export default function AdminInstructorOvertime() {
         {/* Total payout summary shown when an instructor is selected */}
         {filters.instructorId ? (
           <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm">
-            <span className="font-medium">
-              Total Calculated Payout for selection:{" "}
-            </span>
-            <span className="font-semibold">
-              {formatRs(totalPayoutForSelection)}
-            </span>
+            <span className="font-medium">Total Calculated Payout for selection: </span>
+            <span className="font-semibold">{formatRs(totalPayoutForSelection)}</span>
           </div>
         ) : null}
       </section>
@@ -229,9 +228,7 @@ export default function AdminInstructorOvertime() {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Submitted claims</h2>
-          {loading && (
-            <span className="text-sm text-muted-foreground">Loading…</span>
-          )}
+          {loading && <span className="text-sm text-muted-foreground">Loading…</span>}
         </div>
 
         {claims.length === 0 ? (
@@ -243,59 +240,39 @@ export default function AdminInstructorOvertime() {
             <Table className="table-fixed w-full text-center">
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead className="w-[140px] text-center">
-                    Instructor
-                  </TableHead>
+                  <TableHead className="w-[140px] text-center">Instructor</TableHead>
                   <TableHead className="w-[140px] text-center">Date</TableHead>
-                  <TableHead className="w-[120px] text-center">
-                    Designation
-                  </TableHead>
-                  <TableHead className="w-[140px] text-center">
-                    Branch
-                  </TableHead>
-                  <TableHead className="w-[110px] text-center">
-                    Total min
-                  </TableHead>
+                  <TableHead className="w-[120px] text-center">Designation</TableHead>
+                  <TableHead className="w-[140px] text-center">Branch</TableHead>
+                  <TableHead className="w-[110px] text-center">Total min</TableHead>
                   <TableHead className="w-[280px] text-center">Slots</TableHead>
-                  <TableHead className="w-[140px] text-center">
-                    Monthly Salary
-                  </TableHead>
-                  <TableHead className="w-[140px] text-center">
-                    Calculated Payout
-                  </TableHead>
+                  <TableHead className="w-[140px] text-center">Monthly Salary</TableHead>
+                  <TableHead className="w-[140px] text-center">Calculated Payout</TableHead>
                   <TableHead className="w-[220px] text-center">Notes</TableHead>
-                  <TableHead className="w-[120px] text-center">
-                    Status
-                  </TableHead>
+                  <TableHead className="w-[120px] text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
 
               <TableBody>
                 {claims.map((claim) => {
                   const monthlyFromClaim = numberOrNull(claim?.salary);
-                  const monthlyFromProfile = numberOrNull(
-                    claim?.instructor?.salary
-                  );
+                  const monthlyFromProfile = numberOrNull(claim?.instructor?.salary);
                   const monthly = monthlyFromClaim ?? monthlyFromProfile;
                   const payout = calcOvertimePayout(claim);
                   const isVerified = !!claim.verified;
 
                   return (
-                    <TableRow
-                      key={claim._id}
-                      className="align-middle text-center"
-                    >
+                    <TableRow key={claim._id} className="align-middle text-center">
                       <TableCell className="font-medium">
-                        {claim.instructorName ||
-                          claim.instructor?.fullName ||
-                          "--"}
+                        {claim.instructorName || claim.instructor?.fullName || "--"}
                       </TableCell>
+
                       <TableCell>{formatDateLabel(claim.date)}</TableCell>
+
                       <TableCell>
-                        {claim.designation ||
-                          claim.instructor?.designation ||
-                          "--"}
+                        {claim.designation || claim.instructor?.designation || "--"}
                       </TableCell>
+
                       <TableCell>{claim.branchName || "--"}</TableCell>
 
                       <TableCell className="font-medium tabular-nums">
@@ -303,8 +280,7 @@ export default function AdminInstructorOvertime() {
                       </TableCell>
 
                       <TableCell>
-                        {Array.isArray(claim.overtimeSlots) &&
-                        claim.overtimeSlots.length ? (
+                        {Array.isArray(claim.overtimeSlots) && claim.overtimeSlots.length ? (
                           <div className="flex flex-wrap justify-center gap-1">
                             {claim.overtimeSlots.map((slot, i) => (
                               <span
@@ -317,9 +293,7 @@ export default function AdminInstructorOvertime() {
                             ))}
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">
-                            No slots recorded
-                          </span>
+                          <span className="text-xs text-muted-foreground">No slots recorded</span>
                         )}
                       </TableCell>
 
