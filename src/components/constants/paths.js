@@ -11,4 +11,5 @@ export const paths = {
   MARK_ATTENDANCE: "mark-attendance",
   LEAVE_REQUESTS: "leaves",
   INSTRUCTOR_OVERTIME: "instructor-overtime",
+  MONTHLY_OVERTIME_REPORT: "monthly-overtime-report",
 };

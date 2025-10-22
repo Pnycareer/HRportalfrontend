@@ -6,6 +6,7 @@ export function useLeaveReports() {
   const [monthly, setMonthly] = React.useState(null);
   const [yearly, setYearly] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
+  const [savingAllowance, setSavingAllowance] = React.useState(false);
 
   const fetchMonthly = React.useCallback(async ({ userId, year, month }) => {
     setLoading(true);
@@ -39,14 +40,37 @@ export function useLeaveReports() {
     }
   }, []);
 
+  const updateAllowance = React.useCallback(
+    async ({ userId, year, allowed, remaining }) => {
+      setSavingAllowance(true);
+      try {
+        const { data } = await api.put("/api/leaves/allowance", {
+          userId,
+          year,
+          allowed,
+          remaining,
+        });
+        toast.success("Allowance updated");
+        return data;
+      } catch (error) {
+        toast.error(error?.response?.data?.message || error.message || "Failed to update allowance");
+        throw error;
+      } finally {
+        setSavingAllowance(false);
+      }
+    },
+    []
+  );
+
   return {
     monthly,
     yearly,
     loading,
+    savingAllowance,
     fetchMonthly,
     fetchYearly,
+    updateAllowance,
     setMonthly,
     setYearly,
   };
 }
-

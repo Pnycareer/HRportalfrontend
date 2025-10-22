@@ -27,6 +27,8 @@ const DESIGNATIONS = [
   "Receptionist",
   "CSR",
   "Office Boy",
+  "Instructor",
+  "HOD",
 ];
 
 export default function Register() {

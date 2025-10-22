@@ -11,15 +11,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toast } from "sonner";
 
+// ---------- helpers -----------------------------------------------------------
 function minutesToHuman(minutes) {
-  if (!Number.isFinite(minutes) || minutes <= 0) return "0h";
-  const hrs = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (mins === 0) return `${hrs}h`;
-  if (hrs === 0) return `${mins}m`;
-  return `${hrs}h ${mins}m`;
+  if (!Number.isFinite(minutes) || minutes <= 0) return "0 min";
+  return `${minutes} min`;
 }
 
 function formatDateLabel(value) {
@@ -35,50 +31,87 @@ function formatDateLabel(value) {
 }
 
 function formatTimeRange(slot) {
-  if (!slot?.from || !slot?.to) return "—";
+  if (!slot?.from || !slot?.to) return "--";
   const from = new Date(slot.from);
   const to = new Date(slot.to);
-  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return "—";
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return "--";
   const formatter = new Intl.DateTimeFormat([], {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: true,
   });
-  return `${formatter.format(from)} → ${formatter.format(to)} (${minutesToHuman(
-    slot.durationMinutes
+  return `${formatter.format(from)} -> ${formatter.format(to)} (${minutesToHuman(
+    Number(slot.durationMinutes)
   )})`;
 }
 
+function getDaysInMonthFromDate(dateLike) {
+  const d = new Date(dateLike);
+  if (Number.isNaN(d.getTime())) return null;
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  return new Date(y, m + 1, 0).getDate();
+}
+
+function numberOrNull(n) {
+  const x = Number(n);
+  return Number.isFinite(x) ? x : null;
+}
+
+function formatRs(amount) {
+  if (!Number.isFinite(amount)) return "--";
+  return `Rs ${new Intl.NumberFormat().format(Math.round(amount))}`;
+}
+
+// per-minute-rate = (monthlySalary / daysInMonth) / 9 / 60
+function calcOvertimePayout(claim) {
+  if (!claim) return null;
+  const monthlyFromClaim = numberOrNull(claim?.salary);
+  const monthlyFromProfile = numberOrNull(claim?.instructor?.salary);
+  const monthly = monthlyFromClaim ?? monthlyFromProfile;
+  const minutes = numberOrNull(claim?.totalDurationMinutes);
+  const days = getDaysInMonthFromDate(claim?.date);
+  if (
+    monthly === null ||
+    minutes === null ||
+    !Number.isFinite(days) ||
+    days <= 0
+  ) {
+    return null;
+  }
+  const perMinute = monthly / days / 9 / 60;
+  return perMinute * minutes;
+}
+// -----------------------------------------------------------------------------
+
 export default function AdminInstructorOvertime() {
-  const { claims, loading, saving, fetchClaims, updateClaim } = useInstructorOvertime();
-  const [filters, setFilters] = React.useState({ date: "" });
-  const [salaryDrafts, setSalaryDrafts] = React.useState({});
-  const [updatingId, setUpdatingId] = React.useState(null);
+  const { claims, loading, saving, fetchClaims, updateClaim } =
+    useInstructorOvertime();
+
+  // filters: date + instructor
+  const [filters, setFilters] = React.useState({ date: "", instructorId: "" });
 
   React.useEffect(() => {
     fetchClaims().catch(() => {});
   }, [fetchClaims]);
 
-  // Prefill salary from claim.salary, else fallback to instructor.salary (profile)
-  React.useEffect(() => {
-    if (!Array.isArray(claims)) return;
-    setSalaryDrafts((prev) => {
-      const next = { ...prev };
-      claims.forEach((claim) => {
-        if (next[claim._id] === undefined) {
-          const claimNum = Number(claim?.salary);
-          const profileNum = Number(claim?.instructor?.salary);
-          const fromClaim = Number.isFinite(claimNum) ? claimNum : null;
-          const fromProfile = Number.isFinite(profileNum) ? profileNum : null;
-          const value = fromClaim !== null ? fromClaim : fromProfile !== null ? fromProfile : null;
-          next[claim._id] = value !== null ? String(value) : "";
-        }
-      });
-      return next;
-    });
+  // instructor dropdown options
+  const instructorOptions = React.useMemo(() => {
+    const map = new Map();
+    for (const c of claims || []) {
+      const id =
+        c.instructorId ||
+        c.instructor?._id ||
+        c.instructorIdStr ||
+        c.instructor?.id;
+      const name = c.instructorName || c.instructor?.fullName || "Unknown";
+      if (id && !map.has(id)) map.set(id, name);
+    }
+    return Array.from(map, ([value, label]) => ({ value, label }));
   }, [claims]);
 
-  const handleFilterChange = (field) => (event) => {
-    const value = event?.target ? event.target.value : event;
+  const handleFilterChange = (field) => (e) => {
+    const value = e?.target ? e.target.value : e;
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -86,52 +119,41 @@ export default function AdminInstructorOvertime() {
     try {
       await fetchClaims({
         date: filters.date || undefined,
+        instructorId: filters.instructorId || undefined,
       });
-    } catch {
-      // toast handled in hook
-    }
+    } catch {}
   };
 
   const resetFilters = async () => {
-    setFilters({ date: "" });
+    setFilters({ date: "", instructorId: "" });
     try {
       await fetchClaims({});
-    } catch {
-      // handled in hook
-    }
+    } catch {}
   };
 
-  const handleSalaryChange = (id, value) => {
-    setSalaryDrafts((prev) => ({ ...prev, [id]: value }));
-  };
+  // Sum of payouts for visible table (used when instructor selected)
+  const totalPayoutForSelection = React.useMemo(() => {
+    return claims.reduce((sum, c) => {
+      const p = calcOvertimePayout(c);
+      return sum + (Number.isFinite(p) ? p : 0);
+    }, 0);
+  }, [claims]);
 
-  const handleSalarySave = async (claim) => {
-    const raw = salaryDrafts[claim._id];
-    if (raw === undefined) {
-      toast.error("Enter salary before saving.");
-      return;
-    }
-    const numeric = Number(raw);
-    if (!Number.isFinite(numeric) || numeric < 0) {
-      toast.error("Salary must be a non-negative number.");
-      return;
-    }
-    setUpdatingId(claim._id);
+  const verifyRow = async (claim) => {
+    // server enforces admin-only; UI just calls patch
     try {
-      await updateClaim(claim._id, { salary: numeric });
-    } catch {
-      // handled inside hook
-    } finally {
-      setUpdatingId(null);
-    }
+      await updateClaim(claim._id, { verified: true });
+    } catch {}
   };
 
   return (
     <div className="space-y-8">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold text-foreground">Instructor Overtime Claims</h1>
+        <h1 className="text-2xl font-semibold text-foreground">
+          Instructor Overtime Claims
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Review submitted overtime logs, validate the hours, and set the agreed payout.
+          Review, verify, and see payouts.
         </p>
       </header>
 
@@ -144,28 +166,72 @@ export default function AdminInstructorOvertime() {
               type="date"
               value={filters.date}
               onChange={handleFilterChange("date")}
+              className="w-[220px]"
             />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="filter-instructor">Filter by instructor</Label>
+            <select
+              id="filter-instructor"
+              value={filters.instructorId}
+              onChange={handleFilterChange("instructorId")}
+              className="h-10 w-[260px] rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">All instructors</option>
+              {instructorOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center gap-3 pb-1">
             <Button type="button" onClick={applyFilters} disabled={loading}>
               Apply
             </Button>
-            <Button type="button" variant="outline" onClick={resetFilters} disabled={loading}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={resetFilters}
+              disabled={loading}
+            >
               Reset
             </Button>
           </div>
+
           <div className="ml-auto flex items-center gap-3 pb-1">
-            <Button type="button" variant="ghost" onClick={() => fetchClaims()} disabled={loading}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => fetchClaims()}
+              disabled={loading}
+            >
               Refresh
             </Button>
           </div>
         </div>
+
+        {/* Total payout summary shown when an instructor is selected */}
+        {filters.instructorId ? (
+          <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+            <span className="font-medium">
+              Total Calculated Payout for selection:{" "}
+            </span>
+            <span className="font-semibold">
+              {formatRs(totalPayoutForSelection)}
+            </span>
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Submitted claims</h2>
-          {loading && <span className="text-sm text-muted-foreground">Loading…</span>}
+          {loading && (
+            <span className="text-sm text-muted-foreground">Loading…</span>
+          )}
         </div>
 
         {claims.length === 0 ? (
@@ -173,74 +239,122 @@ export default function AdminInstructorOvertime() {
             No overtime claims found for the selected filters.
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border">
-            <Table>
-              <TableHeader>
+          <div className="overflow-x-auto rounded-xl border flex justify-center">
+            <Table className="table-fixed w-full text-center">
+              <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead>Instructor</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Designation</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Total duration</TableHead>
-                  <TableHead>Slots</TableHead>
-                  <TableHead className="min-w-[160px]">Salary (auto from profile)</TableHead>
-                  <TableHead>Notes</TableHead>
+                  <TableHead className="w-[140px] text-center">
+                    Instructor
+                  </TableHead>
+                  <TableHead className="w-[140px] text-center">Date</TableHead>
+                  <TableHead className="w-[120px] text-center">
+                    Designation
+                  </TableHead>
+                  <TableHead className="w-[140px] text-center">
+                    Branch
+                  </TableHead>
+                  <TableHead className="w-[110px] text-center">
+                    Total min
+                  </TableHead>
+                  <TableHead className="w-[280px] text-center">Slots</TableHead>
+                  <TableHead className="w-[140px] text-center">
+                    Monthly Salary
+                  </TableHead>
+                  <TableHead className="w-[140px] text-center">
+                    Calculated Payout
+                  </TableHead>
+                  <TableHead className="w-[220px] text-center">Notes</TableHead>
+                  <TableHead className="w-[120px] text-center">
+                    Status
+                  </TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
-                {claims.map((claim) => (
-                  <TableRow key={claim._id}>
-                    <TableCell className="whitespace-nowrap font-medium">
-                      {claim.instructorName || claim.instructor?.fullName || "—"}
-                    </TableCell>
-                    <TableCell>{formatDateLabel(claim.date)}</TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {claim.designation || claim.instructor?.designation || "—"}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{claim.branchName || "—"}</TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {minutesToHuman(claim.totalDurationMinutes)}
-                    </TableCell>
-                    <TableCell className="space-y-1 min-w-[200px]">
-                      {Array.isArray(claim.overtimeSlots) && claim.overtimeSlots.length ? (
-                        claim.overtimeSlots.map((slot, index) => (
-                          <div key={index} className="rounded-md bg-muted px-2 py-1 text-xs font-medium">
-                            {formatTimeRange(slot)}
+                {claims.map((claim) => {
+                  const monthlyFromClaim = numberOrNull(claim?.salary);
+                  const monthlyFromProfile = numberOrNull(
+                    claim?.instructor?.salary
+                  );
+                  const monthly = monthlyFromClaim ?? monthlyFromProfile;
+                  const payout = calcOvertimePayout(claim);
+                  const isVerified = !!claim.verified;
+
+                  return (
+                    <TableRow
+                      key={claim._id}
+                      className="align-middle text-center"
+                    >
+                      <TableCell className="font-medium">
+                        {claim.instructorName ||
+                          claim.instructor?.fullName ||
+                          "--"}
+                      </TableCell>
+                      <TableCell>{formatDateLabel(claim.date)}</TableCell>
+                      <TableCell>
+                        {claim.designation ||
+                          claim.instructor?.designation ||
+                          "--"}
+                      </TableCell>
+                      <TableCell>{claim.branchName || "--"}</TableCell>
+
+                      <TableCell className="font-medium tabular-nums">
+                        {minutesToHuman(claim.totalDurationMinutes)}
+                      </TableCell>
+
+                      <TableCell>
+                        {Array.isArray(claim.overtimeSlots) &&
+                        claim.overtimeSlots.length ? (
+                          <div className="flex flex-wrap justify-center gap-1">
+                            {claim.overtimeSlots.map((slot, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center truncate rounded-md bg-muted px-2 py-1 text-xs font-medium"
+                                title={formatTimeRange(slot)}
+                              >
+                                {formatTimeRange(slot)}
+                              </span>
+                            ))}
                           </div>
-                        ))
-                      ) : (
-                        <span className="text-xs text-muted-foreground">No slots recorded</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={salaryDrafts[claim._id] ?? ""}
-                          onChange={(event) => handleSalaryChange(claim._id, event.target.value)}
-                          placeholder="0.00"
-                        />
-                        {!Number.isFinite(Number(claim?.salary)) &&
-                        Number.isFinite(Number(claim?.instructor?.salary)) ? (
-                          <p className="text-[11px] text-muted-foreground">Prefilled from profile</p>
-                        ) : null}
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => handleSalarySave(claim)}
-                          disabled={saving || updatingId === claim._id}
-                        >
-                          {updatingId === claim._id ? "Saving..." : "Save"}
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-xs whitespace-normal">
-                      {claim.notes?.trim() || "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            No slots recorded
+                          </span>
+                        )}
+                      </TableCell>
+
+                      <TableCell className="tabular-nums font-medium">
+                        {monthly != null ? formatRs(monthly) : "--"}
+                      </TableCell>
+
+                      <TableCell className="font-semibold tabular-nums">
+                        {formatRs(payout)}
+                      </TableCell>
+
+                      <TableCell className="whitespace-normal">
+                        {claim.notes?.trim() || "--"}
+                      </TableCell>
+
+                      <TableCell className="whitespace-nowrap">
+                        {isVerified ? (
+                          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
+                            Verified
+                          </span>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => verifyRow(claim)}
+                            disabled={saving}
+                          >
+                            Verify
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

@@ -24,7 +24,7 @@ function slug(s) {
 export default function MonthlyBranchReport() {
   const { branch, setBranch, year, setYear, month, setMonth, loading, error, grouped } = useAttendanceReport();
 
-  // derive available branches from the loaded rows (so dropdown isn't empty)
+  // derive available branches from the loaded rows
   const derivedBranches = React.useMemo(() => {
     const set = new Set(["all"]);
     for (const sec of grouped.sections || []) {
@@ -35,68 +35,60 @@ export default function MonthlyBranchReport() {
     return Array.from(set);
   }, [grouped.sections]);
 
-  // ===== PDF EXPORT (sexy + professional) =====
+  // ✅ NEW: flatten all users across departments
+  const allItems = React.useMemo(() => {
+    const list = (grouped.sections || []).flatMap(sec => sec.items || []);
+    // optional: sort by fullName for nicer UX
+    return list.sort((a, b) => String(a.fullName || "").localeCompare(String(b.fullName || "")));
+  }, [grouped.sections]);
+
+  // ===== PDF EXPORT (single-table, branch-only) =====
   function downloadPdf() {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const margin = 32;
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 32;
 
-  const monthNum = Number(month);
-  const monthLabel = MONTHS.find((m) => m.n === monthNum)?.label || String(monthNum);
-  const branchLabel = branch === "all" ? "All" : branch;
-  const reportTitle = `Monthly Branch Report — ${monthLabel} ${year}`;
-  const reportSub = `Branch: ${branchLabel}`;
+    const monthNum = Number(month);
+    const monthLabel = MONTHS.find((m) => m.n === monthNum)?.label || String(monthNum);
+    const branchLabel = branch === "all" ? "All" : branch;
+    const reportTitle = `Monthly Branch Report — ${monthLabel} ${year}`;
+    const reportSub = `Branch: ${branchLabel}`;
 
-  // chrome painter – called before each table page via addPageContent
-  const paintBackground = (pageNumber) => {
-    // gradient header (very light)
-    const headerH = 64;
-    const steps = 10;
-    for (let i = 0; i < steps; i++) {
-      const y = margin + (i * headerH) / steps;
-      const shade = 255 - i * 2; // super subtle
-      doc.setFillColor(shade, shade, 255);
-      doc.rect(margin, y, pageW - margin * 2, headerH / steps, "F");
-    }
+    const paintBackground = (pageNumber) => {
+      const headerH = 64;
+      const steps = 10;
+      for (let i = 0; i < steps; i++) {
+        const y = margin + (i * headerH) / steps;
+        const shade = 255 - i * 2;
+        doc.setFillColor(shade, shade, 255);
+        doc.rect(margin, y, pageW - margin * 2, headerH / steps, "F");
+      }
 
-    // page border
-    doc.setDrawColor(220, 225, 235);
-    doc.setLineWidth(0.8);
-    doc.rect(margin, margin, pageW - margin * 2, pageH - margin * 2);
+      doc.setDrawColor(220, 225, 235);
+      doc.setLineWidth(0.8);
+      doc.rect(margin, margin, pageW - margin * 2, pageH - margin * 2);
 
-  
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(14);
+      doc.text(reportTitle, margin + 14, margin + 26);
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text(reportSub, margin + 14, margin + 42);
 
-    // header text
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(14);
-    doc.text(reportTitle, margin + 14, margin + 26);
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(reportSub, margin + 14, margin + 42);
+      doc.setTextColor(140);
+      doc.setFontSize(9);
+      doc.text(`Page ${pageNumber}`, pageW - margin - 54, pageH - margin + 14);
+    };
 
-    // footer page number (will be visible after table too)
-    doc.setTextColor(140);
-    doc.setFontSize(9);
-    doc.text(`Page ${pageNumber}`, pageW - margin - 54, pageH - margin + 14);
-  };
+    let pageNo = 1;
+    paintBackground(pageNo);
 
-  // first page chrome
-  let pageNo = 1;
-  paintBackground(pageNo);
+    const tableHead = ["Full Name", "Emp ID", ...ORDER.map((k) => LABELS[k])];
+    let cursorY = margin + 80;
 
-  const tableHead = ["Full Name", "Emp ID", ...ORDER.map((k) => LABELS[k])];
-  let cursorY = margin + 80;
-
-  // draw each department
-  grouped.sections.forEach((sec, idx) => {
-    // section label
-    doc.setFontSize(11);
-    doc.setTextColor(55);
-    doc.text(`Department: ${sec.dept}`, margin + 8, cursorY);
-    cursorY += 8;
-
-    const body = sec.items.map((r) => [
+    // ✅ single table body (no departments)
+    const body = allItems.map((r) => [
       r.fullName,
       r.employeeId || "",
       ...ORDER.map((k) => r[k] || 0),
@@ -111,60 +103,46 @@ export default function MonthlyBranchReport() {
       bodyStyles: { textColor: 60, lineColor: [235, 238, 246] },
       theme: "grid",
       margin: { left: margin + 8, right: margin + 8 },
-
-      // IMPORTANT: this runs BEFORE the table is painted on each page
       addPageContent: () => {
-        // When autoTable makes a new page, increase counter and repaint background
         const currentPage = doc.internal.getNumberOfPages();
-        if (currentPage !== pageNo) {
-          pageNo = currentPage;
-        }
+        if (currentPage !== pageNo) pageNo = currentPage;
         paintBackground(pageNo);
       },
     });
 
     cursorY = doc.lastAutoTable.finalY + 24;
 
-    // manual page break before next section if not enough space for approval block later
-    if (idx < grouped.sections.length - 1 && cursorY > pageH - 180) {
+    // approval summary block at end
+    const sigHeight = 120;
+    if (cursorY + sigHeight > pageH - margin) {
       doc.addPage();
       pageNo += 1;
       paintBackground(pageNo);
       cursorY = margin + 80;
     }
-  });
+    const blockTop = Math.max(cursorY, pageH - margin - sigHeight);
+    const blockLeft = margin + 24;
+    doc.setFontSize(12);
+    doc.setTextColor(45);
+    doc.text("Approval Records", blockLeft, blockTop);
 
-  // approval summary block at end
-  const sigHeight = 120;
-  if (cursorY + sigHeight > pageH - margin) {
-    doc.addPage();
-    pageNo += 1;
-    paintBackground(pageNo);
-    cursorY = margin + 80;
+    doc.setFontSize(10);
+    doc.setTextColor(90);
+    doc.text(
+      "Approvals are logged digitally with employee submission and team lead decision timestamps.",
+      blockLeft,
+      blockTop + 24,
+      { maxWidth: pageW - blockLeft * 2 }
+    );
+
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    const printedOn = new Date().toLocaleString();
+    doc.text(`Generated: ${printedOn}`, blockLeft, pageH - margin - 8);
+
+    const file = `attendance_report_${slug(branchLabel)}_${year}_${slug(monthLabel)}.pdf`;
+    doc.save(file);
   }
-  const blockTop = Math.max(cursorY, pageH - margin - sigHeight);
-  const blockLeft = margin + 24;
-  doc.setFontSize(12);
-  doc.setTextColor(45);
-  doc.text("Approval Records", blockLeft, blockTop);
-
-  doc.setFontSize(10);
-  doc.setTextColor(90);
-  doc.text(
-    "Approvals are logged digitally with employee submission and team lead decision timestamps.",
-    blockLeft,
-    blockTop + 24,
-    { maxWidth: pageW - blockLeft * 2 }
-  );
-
-  doc.setFontSize(9);
-  doc.setTextColor(120);
-  const printedOn = new Date().toLocaleString();
-  doc.text(`Generated: ${printedOn}`, blockLeft, pageH - margin - 8);
-
-  const file = `attendance_report_${slug(branchLabel)}_${year}_${slug(monthLabel)}.pdf`;
-  doc.save(file);
-}
   // ===== end PDF export =====
 
   return (
@@ -186,6 +164,7 @@ export default function MonthlyBranchReport() {
                 ))}
               </SelectContent>
             </Select>
+
             {/* Month */}
             <Select value={String(month)} onValueChange={(v) => setMonth(parseInt(v, 10))}>
               <SelectTrigger className="w-[140px]">
@@ -197,6 +176,7 @@ export default function MonthlyBranchReport() {
                 ))}
               </SelectContent>
             </Select>
+
             {/* Year */}
             <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v, 10))}>
               <SelectTrigger className="w-[120px]">
@@ -212,44 +192,48 @@ export default function MonthlyBranchReport() {
             <Button onClick={downloadPdf}>Download PDF</Button>
           </div>
         </div>
+
+        {/* ✅ show selected branch label prominently */}
+        <div className="text-sm text-muted-foreground">
+          Branch:&nbsp;
+          <span className="font-medium text-foreground">
+            {branch === "all" ? "All branches" : branch}
+          </span>
+          {allItems?.length ? ` • ${allItems.length} users` : null}
+        </div>
       </div>
 
       {loading ? (
         <div className="rounded-xl border p-6 text-sm text-muted-foreground">Loading…</div>
       ) : error ? (
         <div className="rounded-xl border p-6 text-sm text-red-600">{error}</div>
-      ) : (grouped.sections.length === 0) ? (
+      ) : (!allItems || allItems.length === 0) ? (
         <div className="rounded-xl border p-6 text-sm text-muted-foreground">No data.</div>
       ) : (
-        grouped.sections.map((sec) => (
-          <div key={sec.dept} className="rounded-xl border overflow-x-auto">
-            <div className="flex items-center justify-between p-4">
-              <div className="text-sm font-semibold">Department: {sec.dept}</div>
-            </div>
-            <Table className="min-w-[980px]">
-              <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                <TableRow>
-                  <TableHead className="w-[260px]">Full Name</TableHead>
-                  <TableHead className="w-[120px]">Emp ID</TableHead>
+        <div className="rounded-xl border overflow-x-auto">
+          <Table className="min-w-[980px]">
+            <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <TableRow>
+                <TableHead className="w-[260px]">Full Name</TableHead>
+                <TableHead className="w-[120px]">Emp ID</TableHead>
+                {ORDER.map((k) => (
+                  <TableHead key={k} className="text-right">{LABELS[k]}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {allItems.map((r) => (
+                <TableRow key={`${r.employeeId || r.fullName}`} className="odd:bg-muted/40 hover:bg-muted/60 transition-colors">
+                  <TableCell className="font-medium">{r.fullName}</TableCell>
+                  <TableCell className="text-muted-foreground">{r.employeeId}</TableCell>
                   {ORDER.map((k) => (
-                    <TableHead key={k} className="text-right">{LABELS[k]}</TableHead>
+                    <TableCell key={k} className="text-right">{r[k] || 0}</TableCell>
                   ))}
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sec.items.map((r) => (
-                  <TableRow key={`${sec.dept}-${r.employeeId || r.fullName}`} className="odd:bg-muted/40 hover:bg-muted/60 transition-colors">
-                    <TableCell className="font-medium">{r.fullName}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.employeeId}</TableCell>
-                    {ORDER.map((k) => (
-                      <TableCell key={k} className="text-right">{r[k] || 0}</TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ))
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </div>
   );

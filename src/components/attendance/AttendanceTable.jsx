@@ -136,14 +136,13 @@ export default function AttendanceTable({
     );
   }, []);
 
-  /* === Auto-mark employees whose officialOffDays include today === */
+  /* === Auto-mark employees whose officialOffDays include today (KEEP THIS) === */
   React.useEffect(() => {
     if (!todayWeekday) return;
     rows.forEach((u) => {
       const offDays = Array.isArray(u.officialOffDays) ? u.officialOffDays : [];
       if (!offDays.includes(todayWeekday)) return;
 
-      // current status considering drafts/persisted
       const current = (changes[u._id]?.status ?? persisted[u._id]?.status ?? "");
       if (current !== OFF_STATUS) {
         onStatusChange?.(u._id, OFF_STATUS);
@@ -198,12 +197,17 @@ export default function AttendanceTable({
               const hasNote = !!(merged.note && merged.note.trim().length);
 
               return (
-                <TableRow key={u._id} className={`odd:bg-muted/40 hover:bg-muted/60 transition-colors ${isOfficialOffToday ? "opacity-95" : ""} [&>*]:py-2`}>
+                <TableRow
+                  key={u._id}
+                  className={`odd:bg-muted/40 hover:bg-muted/60 transition-colors ${isOfficialOffToday ? "opacity-95" : ""} [&>*]:py-2`}
+                >
                   <TableCell className="font-medium">
                     <div className="max-w-[200px] truncate">{u.fullName}</div>
                     {isOfficialOffToday && (
                       <div className="mt-1 inline-flex items-center gap-2">
-                        <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">Off today</span>
+                        <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                          Off today
+                        </span>
                       </div>
                     )}
                   </TableCell>
@@ -252,7 +256,6 @@ export default function AttendanceTable({
                     )}
                   </TableCell>
 
-                  {/* Off Days */}
                   <TableCell>
                     {offDays.length ? (
                       <button
@@ -292,6 +295,7 @@ export default function AttendanceTable({
                     </Select>
                   </TableCell>
 
+                  {/* Check-in (disabled on official off) */}
                   <TableCell>
                     <Input
                       type="time"
@@ -303,6 +307,7 @@ export default function AttendanceTable({
                     />
                   </TableCell>
 
+                  {/* Check-out (disabled on official off) */}
                   <TableCell>
                     <Input
                       type="time"

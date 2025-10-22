@@ -1,3 +1,4 @@
+// hooks/useInstructorOvertime.js
 import React from "react";
 import api from "@/lib/axios";
 import { toast } from "sonner";
@@ -24,46 +25,33 @@ export function useInstructorOvertime(defaultParams = {}) {
     }
   }, []);
 
-  const createClaim = React.useCallback(
-    async (payload) => {
-      setSaving(true);
-      try {
-        await api.post("/api/instructor-overtime", payload);
-        toast.success("Overtime claim submitted for review");
-        await fetchClaims();
-      } catch (error) {
-        toast.error(error.message || "Failed to submit overtime claim");
-        throw error;
-      } finally {
-        setSaving(false);
-      }
-    },
-    [fetchClaims]
-  );
+  const createClaim = React.useCallback(async (payload) => {
+    setSaving(true);
+    try {
+      await api.post("/api/instructor-overtime", payload);
+      toast.success("Overtime claim submitted for review");
+      await fetchClaims();
+    } catch (error) {
+      toast.error(error.message || "Failed to submit overtime claim");
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  }, [fetchClaims]);
 
-  const updateClaim = React.useCallback(
-    async (id, payload) => {
-      setSaving(true);
-      try {
-        await api.patch(`/api/instructor-overtime/${id}`, payload);
-        toast.success("Overtime claim updated");
-        await fetchClaims();
-      } catch (error) {
-        toast.error(error.message || "Failed to update overtime claim");
-        throw error;
-      } finally {
-        setSaving(false);
-      }
-    },
-    [fetchClaims]
-  );
+  const updateClaim = React.useCallback(async (id, payload) => {
+    setSaving(true);
+    try {
+      await api.patch(`/api/instructor-overtime/${id}`, payload);
+      toast.success("Overtime claim updated");
+      await fetchClaims();
+    } catch (error) {
+      toast.error(error.message || "Failed to update overtime claim");
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  }, [fetchClaims]);
 
-  return {
-    claims,
-    loading,
-    saving,
-    fetchClaims,
-    createClaim,
-    updateClaim,
-  };
+  return { claims, loading, saving, fetchClaims, createClaim, updateClaim };
 }

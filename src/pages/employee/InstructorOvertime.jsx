@@ -14,6 +14,15 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 
+// --- branch presets ---------------------------------------------------------
+const CITY_BRANCHES = {
+  Lahore: ["Arfa Tower", "Johar Town", "Iqbal Town", "Shahdrah"],
+  Multan: ["Multan"],
+  Sargodha: ["Sargodha"],
+  Rawalpindi: ["Rawalpindi"],
+};
+
+// --- helpers ----------------------------------------------------------------
 function toMinutes(value) {
   if (!value || typeof value !== "string") return null;
   const [hourStr, minuteStr] = value.split(":");
@@ -26,26 +35,36 @@ function toMinutes(value) {
 }
 
 function minutesToHuman(minutes) {
-  if (!Number.isFinite(minutes) || minutes <= 0) return "0h";
-  const hrs = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (mins === 0) return `${hrs}h`;
-  if (hrs === 0) return `${mins}m`;
-  return `${hrs}h ${mins}m`;
+  if (!Number.isFinite(minutes) || minutes <= 0) return "0 min";
+  return `${minutes} min`;
 }
 
-function formatClockLabel(dateInput) {
-  if (!dateInput) return "--";
-  const value = new Date(dateInput);
-  if (Number.isNaN(value.getTime())) return "--";
-  return value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+function hhmmTo12hLabel(hhmm) {
+  if (!hhmm || typeof hhmm !== "string") return "--";
+  const [hStr, mStr] = hhmm.split(":");
+  const h = Number(hStr);
+  const m = Number(mStr);
+  if (!Number.isInteger(h) || !Number.isInteger(m)) return hhmm;
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-function formatDateLabel(dateInput) {
-  if (!dateInput) return "--";
-  const value = new Date(dateInput);
-  if (Number.isNaN(value.getTime())) return "--";
-  return value.toLocaleDateString([], {
+function formatClockLabel(value) {
+  if (!value) return "--";
+  if (typeof value === "string" && /^\d{1,2}:\d{2}$/.test(value)) {
+    return hhmmTo12hLabel(value);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
+}
+
+function formatDateLabel(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleDateString([], {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -60,34 +79,38 @@ function createSlotId() {
   return Math.random().toString(36).slice(2);
 }
 
-const initialSlot = () => ({ id: createSlotId(), start: "", end: "" });
+const makeInitialSlot = () => ({ id: createSlotId(), start: "", end: "" });
 
+// --- component --------------------------------------------------------------
 export default function InstructorOvertime() {
   const { user } = useAuth();
   const { claims, loading, saving, fetchClaims, createClaim } = useInstructorOvertime();
 
   const [form, setForm] = React.useState(() => {
     const today = new Date();
-    const dateValue = today.toISOString().slice(0, 10);
+    const defaultDate = today.toISOString().slice(0, 10);
     return {
-      date: dateValue,
+      date: defaultDate,
+      city: "",
       branchName: "",
       notes: "",
     };
   });
-  const [slots, setSlots] = React.useState(() => [initialSlot()]);
+
+  const [slots, setSlots] = React.useState(() => [makeInitialSlot()]);
 
   React.useEffect(() => {
     fetchClaims().catch(() => {});
   }, [fetchClaims]);
 
+  // Reset branch if it no longer exists for the picked city
   React.useEffect(() => {
-    if (!user?.branch) return;
-    setForm((prev) => {
-      if (prev.branchName) return prev;
-      return { ...prev, branchName: user.branch };
-    });
-  }, [user?.branch]);
+    if (!form.city) return;
+    const allowedBranches = CITY_BRANCHES[form.city] || [];
+    if (!allowedBranches.includes(form.branchName)) {
+      setForm((prev) => ({ ...prev, branchName: "" }));
+    }
+  }, [form.city, form.branchName]);
 
   const totalMinutes = React.useMemo(() => {
     return slots.reduce((sum, slot) => {
@@ -103,47 +126,51 @@ export default function InstructorOvertime() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSlotChange = (id, field, value) => {
+  const handleSlotChange = (slotId, field, value) => {
     setSlots((prev) =>
-      prev.map((slot) => (slot.id === id ? { ...slot, [field]: value } : slot))
+      prev.map((slot) => (slot.id === slotId ? { ...slot, [field]: value } : slot))
     );
   };
 
   const handleAddSlot = () => {
-    setSlots((prev) => [...prev, initialSlot()]);
+    setSlots((prev) => [...prev, makeInitialSlot()]);
   };
 
-  const handleRemoveSlot = (id) => {
-    setSlots((prev) => (prev.length === 1 ? prev : prev.filter((slot) => slot.id !== id)));
+  const handleRemoveSlot = (slotId) => {
+    setSlots((prev) => (prev.length <= 1 ? prev : prev.filter((slot) => slot.id !== slotId)));
   };
 
-  async function handleSubmit(event) {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+
     if (!form.date) {
-      toast.error("Please select a date for your overtime.");
+      toast.error("Please select a date.");
       return;
     }
-    if (!form.branchName.trim()) {
-      toast.error("Please confirm your branch name.");
+    if (!form.city) {
+      toast.error("Please select a city.");
       return;
     }
+    if (!form.branchName) {
+      toast.error("Please select a branch.");
+      return;
+    }
+
     const preparedSlots = [];
     for (const slot of slots) {
       const start = toMinutes(slot.start);
       const end = toMinutes(slot.end);
       if (start === null || end === null) {
-        toast.error("Please use HH:MM for all overtime slots.");
+        toast.error("Please provide valid start and end times for each slot.");
         return;
       }
       if (end <= start) {
         toast.error("Each overtime slot must end after it starts.");
         return;
       }
-      preparedSlots.push({
-        start: slot.start,
-        end: slot.end,
-      });
+      preparedSlots.push({ start: slot.start, end: slot.end });
     }
+
     if (!preparedSlots.length) {
       toast.error("Add at least one overtime slot.");
       return;
@@ -152,62 +179,86 @@ export default function InstructorOvertime() {
     try {
       await createClaim({
         date: form.date,
-        branchName: form.branchName.trim(),
+        branchName: form.branchName,
+        notes: form.notes,
         overtimeSlots: preparedSlots,
-        notes: form.notes.trim(),
       });
+
+      setSlots([makeInitialSlot()]);
       setForm((prev) => ({ ...prev, notes: "" }));
-      setSlots([initialSlot()]);
     } catch {
-      // handled in hook
+      // errors surfaced via toast in the hook
     }
-  }
+  };
 
   return (
     <div className="space-y-8">
-      <header className="space-y-2">
-        <h2 className="text-2xl font-semibold text-foreground">Instructor Overtime</h2>
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold text-foreground">Instructor Overtime</h1>
         <p className="text-sm text-muted-foreground">
-          Log your overtime sessions so the admin team can review and compensate accordingly.
+          Submit overtime claims and keep track of what has been reviewed by HR.
         </p>
       </header>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-xl border p-4 md:p-6">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="overtime-date">Overtime Date</Label>
+            <Label htmlFor="date">Date</Label>
             <Input
-              id="overtime-date"
+              id="date"
               type="date"
               value={form.date}
+              max={new Date().toISOString().slice(0, 10)}
               onChange={handleFormChange("date")}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="branch-name">Branch</Label>
-            <Input
-              id="branch-name"
-              value={form.branchName}
-              onChange={handleFormChange("branchName")}
-              placeholder="e.g. Clifton Campus"
+            <Label htmlFor="city">City</Label>
+            <select
+              id="city"
+              value={form.city}
+              onChange={handleFormChange("city")}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               required
-            />
+            >
+              <option value="">Select city</option>
+              {Object.keys(CITY_BRANCHES).map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="space-y-2">
-            <Label>Total Duration (preview)</Label>
-            <div className="flex h-10 items-center rounded-md border bg-muted px-3 text-sm font-medium text-foreground/80">
-              {minutesToHuman(totalMinutes)}
-            </div>
+            <Label htmlFor="branch">Branch</Label>
+            <select
+              id="branch"
+              value={form.branchName}
+              onChange={handleFormChange("branchName")}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              required
+            >
+              <option value="">Select branch</option>
+              {(CITY_BRANCHES[form.city] || []).map((branch) => (
+                <option key={branch} value={branch}>
+                  {branch}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label>Total overtime minutes</Label>
+            <Input value={minutesToHuman(totalMinutes)} readOnly />
           </div>
         </div>
 
-        <div className="space-y-4 rounded-xl border p-4 md:p-6">
+        <div className="space-y-3 rounded-lg border p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-base font-semibold">Overtime Slots</h3>
+              <h3 className="text-base font-semibold">Overtime slots</h3>
               <p className="text-sm text-muted-foreground">
-                Add one or more slots covering the hours you instructed beyond your roster.
+                Add one or more time ranges you worked beyond your roster.
               </p>
             </div>
             <Button type="button" variant="outline" onClick={handleAddSlot}>
@@ -216,7 +267,7 @@ export default function InstructorOvertime() {
           </div>
 
           <div className="space-y-3">
-            {slots.map((slot, index) => (
+            {slots.map((slot) => (
               <div
                 key={slot.id}
                 className="grid gap-3 rounded-lg border border-dashed p-4 md:grid-cols-[repeat(2,minmax(0,220px))_auto]"
@@ -275,7 +326,7 @@ export default function InstructorOvertime() {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-foreground">Past overtime claims</h3>
-          {loading && <span className="text-sm text-muted-foreground">Loading…</span>}
+          {loading && <span className="text-sm text-muted-foreground">Loading...</span>}
         </div>
 
         {claims.length === 0 ? (
@@ -290,9 +341,9 @@ export default function InstructorOvertime() {
                   <TableHead>Date</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead>Total time</TableHead>
-                  <TableHead>Salary status</TableHead>
                   <TableHead>Slots</TableHead>
                   <TableHead>Notes</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -301,20 +352,20 @@ export default function InstructorOvertime() {
                     <TableCell className="whitespace-nowrap font-medium">
                       {formatDateLabel(claim.date)}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">{claim.branchName || "—"}</TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {minutesToHuman(claim.totalDurationMinutes)}
+                      {claim.branchName || "--"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {Number.isFinite(claim.salary) && claim.salary > 0
-                        ? `Rs ${new Intl.NumberFormat().format(claim.salary)}`
-                        : "Pending"}
+                      {minutesToHuman(claim.totalDurationMinutes)}
                     </TableCell>
                     <TableCell className="space-y-1">
                       {Array.isArray(claim.overtimeSlots) && claim.overtimeSlots.length > 0 ? (
                         claim.overtimeSlots.map((slot, index) => (
-                          <div key={index} className="rounded-md bg-muted px-2 py-1 text-xs font-medium">
-                            {formatClockLabel(slot.from)} → {formatClockLabel(slot.to)} (
+                          <div
+                            key={`${claim._id}-slot-${index}`}
+                            className="rounded-md bg-muted px-2 py-1 text-xs font-medium"
+                          >
+                            {formatClockLabel(slot.from)} to {formatClockLabel(slot.to)} (
                             {minutesToHuman(slot.durationMinutes)})
                           </div>
                         ))
@@ -323,7 +374,18 @@ export default function InstructorOvertime() {
                       )}
                     </TableCell>
                     <TableCell className="max-w-xs whitespace-normal">
-                      {claim.notes?.trim() || "—"}
+                      {claim.notes?.trim() || "--"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {claim.verified ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
+                          Verified
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium text-amber-600">
+                          Pending review
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

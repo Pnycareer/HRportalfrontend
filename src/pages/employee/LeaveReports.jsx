@@ -1,12 +1,19 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useLeaveReports } from "@/hooks/useLeaveReports";
 import { useAuth } from "@/context/AuthContext";
-import { MonthlyLeaveReport, YearlyLeaveReport } from "@/components/leaves/LeaveReportSheets";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import {
+  MonthlyLeaveReport,
+  YearlyLeaveReport,
+} from "@/components/leaves/LeaveReportSheets";
 
 const months = [
   { value: "1", label: "January" },
@@ -25,13 +32,13 @@ const months = [
 
 export default function LeaveReports() {
   const { user } = useAuth();
-  const { monthly, yearly, loading, fetchMonthly, fetchYearly } = useLeaveReports();
+  const { monthly, yearly, loading, fetchMonthly, fetchYearly } =
+    useLeaveReports();
 
   const now = React.useMemo(() => new Date(), []);
   const [year, setYear] = React.useState(String(now.getUTCFullYear()));
   const [month, setMonth] = React.useState(String(now.getUTCMonth() + 1));
   const [activeTab, setActiveTab] = React.useState("monthly");
-  const reportRef = React.useRef(null);
 
   const loadReports = React.useCallback(async () => {
     const payload = { userId: user?.id, year, month };
@@ -45,34 +52,13 @@ export default function LeaveReports() {
     loadReports().catch(() => {});
   }, [loadReports]);
 
-  const handleDownload = async () => {
-    if (!reportRef.current) return;
-    const canvas = await html2canvas(reportRef.current, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-    });
-    const imageData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "pt", "a4");
-    const width = pdf.internal.pageSize.getWidth();
-    const height = (canvas.height * width) / canvas.width;
-    pdf.addImage(imageData, "PNG", 0, 0, width, height);
-    pdf.save(
-      `${user?.employeeId || "employee"}-${
-        activeTab === "monthly" ? `${month}-${year}` : year
-      }-leave-report.pdf`
-    );
-  };
-
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">
-            Leave Reports
-          </h1>
+          <h1 className="text-2xl font-semibold text-foreground">Leave Reports</h1>
           <p className="text-sm text-muted-foreground">
-            Review and download your monthly or annual leave summary.
+            Review your monthly report or annual summary. Export accepted forms as crisp PDFs (no screenshots).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -122,20 +108,13 @@ export default function LeaveReports() {
         >
           Yearly summary
         </Button>
-        <Button
-          variant="outline"
-          onClick={handleDownload}
-          disabled={loading || (!monthly && !yearly)}
-        >
-          Download PDF
-        </Button>
       </div>
 
       <div className="rounded-xl border bg-card p-4">
         {activeTab === "monthly" ? (
-          <MonthlyLeaveReport data={monthly} ref={reportRef} />
+          <MonthlyLeaveReport data={monthly} />
         ) : (
-          <YearlyLeaveReport data={yearly} ref={reportRef} />
+          <YearlyLeaveReport data={yearly} />
         )}
       </div>
     </div>
@@ -152,4 +131,3 @@ function LabelInput({ id, label, children }) {
     </div>
   );
 }
-

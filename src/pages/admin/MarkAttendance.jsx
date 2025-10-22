@@ -9,33 +9,6 @@ import AttendanceTable from "@/components/attendance/AttendanceTable";
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
-// Lateness config
-const OFFICIAL_START = "09:00";
-const GRACE_MINUTES = 5;
-
-function hhmmToMinutes(hhmm) {
-  if (!hhmm || !/^\d{2}:\d{2}$/.test(hhmm)) return null;
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-}
-function isAtOrAfterSixthLateMinute(checkInHHMM) {
-  const cin = hhmmToMinutes(checkInHHMM);
-  const start = hhmmToMinutes(OFFICIAL_START);
-  if (cin == null || start == null) return false;
-  const diff = cin - start; // minutes late
-  return diff >= (GRACE_MINUTES + 1);
-}
 
 export default function MarkAttendance() {
   const { user } = useAuth();
@@ -47,8 +20,8 @@ export default function MarkAttendance() {
     branch, setBranch, branches,
     dept, setDept, departments,
     reload,
-    updateEmployee,          // ✅ used by Duty/OffDays/Salary modals
-    updateEmployeeSalary,    // ✅ optional; AttendanceTable can use onUpdateEmployee only, but passing this too is harmless
+    updateEmployee,
+    updateEmployeeSalary,
   } = useEmployees();
 
   const {
@@ -65,45 +38,14 @@ export default function MarkAttendance() {
   } = useAttendance();
 
   const loading = usersLoading || attendanceLoading;
-  const [latePrompt, setLatePrompt] = React.useState(null);
-  const closingLatePromptRef = React.useRef(false);
-  const latestLatePromptRef = React.useRef(null);
 
-  React.useEffect(() => {
-    latestLatePromptRef.current = latePrompt;
-  }, [latePrompt]);
-
-  const handleCheckInChange = React.useCallback((id, hhmm) => {
-    setRowChange(id, { checkIn: hhmm });
-    if (!hhmm) return;
-
-    if (isAtOrAfterSixthLateMinute(hhmm)) {
-      setLatePrompt({ id, checkIn: hhmm });
-    } else {
-      const current = changes[id]?.status ?? persisted[id]?.status;
-      if (!current) setRowChange(id, { status: "present" });
-    }
-  }, [changes, persisted, setRowChange]);
-
-  const handleLateDecision = React.useCallback((markLate) => {
-    if (!latePrompt) return;
-    closingLatePromptRef.current = true;
-    setRowChange(latePrompt.id, { status: markLate ? "late" : "present" });
-    setLatePrompt(null);
-  }, [latePrompt, setRowChange]);
-
-  const handleLateDialogOpenChange = React.useCallback((open) => {
-    if (open) return;
-    if (closingLatePromptRef.current) {
-      closingLatePromptRef.current = false;
-      return;
-    }
-    const target = latestLatePromptRef.current;
-    if (target) {
-      setRowChange(target.id, { status: "present" });
-      setLatePrompt(null);
-    }
-  }, [setRowChange]);
+  // ✅ Do NOT auto-mark late/present—only set the time
+  const handleCheckInChange = React.useCallback(
+    (id, hhmm) => {
+      setRowChange(id, { checkIn: hhmm });
+    },
+    [setRowChange]
+  );
 
   return (
     <div className="p-6 space-y-4">
@@ -194,31 +136,10 @@ export default function MarkAttendance() {
           onCheckOutChange={(id, checkOut) => setRowChange(id, { checkOut })}
           onMark={async (id) => { try { await markOne(id); } catch {} }}
           dateYmd={date}
-          onUpdateEmployee={updateEmployee}                
-          onUpdateEmployeeSalary={updateEmployeeSalary}     
+          onUpdateEmployee={updateEmployee}
+          onUpdateEmployeeSalary={updateEmployeeSalary}
         />
       )}
-
-      {/* Late confirmation dialog */}
-      <AlertDialog open={!!latePrompt} onOpenChange={handleLateDialogOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm lateness</AlertDialogTitle>
-            <AlertDialogDescription>
-              Check-in at {latePrompt?.checkIn} is beyond the {GRACE_MINUTES} minute grace period
-              from {OFFICIAL_START}. How would you like to record this employee?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => handleLateDecision(false)}>
-              Keep Present
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={() => handleLateDecision(true)}>
-              Mark Late
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
