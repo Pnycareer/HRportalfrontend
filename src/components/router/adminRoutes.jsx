@@ -9,6 +9,7 @@ import MonthlyOvertimeReport from "@/pages/reports/MonthlyOvertimeReport";
 import LeaveApprovals from "@/pages/admin/LeaveApprovals";
 import LeaveReports from "@/pages/admin/LeaveReports";
 import InstructorOvertime from "@/pages/admin/InstructorOvertime";
+import FuelRequisitionReport from "@/pages/admin/FuelRequisitionReport";
 
 const adminRoutes = [
   {
@@ -24,11 +25,9 @@ const adminRoutes = [
           { path: paths.LEAVE_REQUESTS, element: <LeaveApprovals /> },
           { path: "leave-report", element: <LeaveReports /> },
           { path: "monthly-report", element: <MonthlyBranchReport /> },
-          {
-            path: paths.MONTHLY_OVERTIME_REPORT,
-            element: <MonthlyOvertimeReport />,
-          },
+          { path: paths.MONTHLY_OVERTIME_REPORT,element: <MonthlyOvertimeReport />},
           { path: paths.INSTRUCTOR_OVERTIME, element: <InstructorOvertime /> },
+          { path: "fuel-requisition-report", element: <FuelRequisitionReport/> },
         ],
       },
     ],

@@ -36,6 +36,7 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Clock3,
+  Fuel,
   NotebookPen,
   CalendarClock,
   Headphones,
@@ -91,6 +92,7 @@ const BASE_NAV = [
   { href: "/employee/leaves", label: "Leave Centre", icon: NotebookPen },
   { href: "/employee/leave-report", label: "Leave Reports", icon: FileText },
   { href: "/employee/instructor-overtime", label: "Instructor Overtime", icon: Clock3 },
+  { href: "/employee/fuel-requisition", label: "Fuel Requisition", icon: Fuel },
 ];
 
 const QUICK_METRICS = [

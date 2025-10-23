@@ -12,10 +12,11 @@ import LeaveReports from "@/pages/employee/LeaveReports";
 import UserMonthlyReport from "@/pages/reports/UserMonthlyReport";
 import ProfileCard from "@/pages/employee/ProfileCard";
 import InstructorOvertime from "@/pages/employee/InstructorOvertime";
+import FuelRequistion from "@/pages/Fuel/FuelRequistion";
 
 const employeeRoutes = [
   {
-    element: <PrivateRoute allowedRoles={["employee" , "superadmin"]} />,
+    element: <PrivateRoute allowedRoles={["employee", "superadmin"]} />,
     children: [
       {
         element: <EmployeeLayout />,
@@ -24,9 +25,10 @@ const employeeRoutes = [
           { path: "leaves", element: <LeaveRequests /> },
           { path: "team-lead/review", element: <TeamLeadApprovals /> },
           { path: "leave-report", element: <LeaveReports /> },
-          { path: "user-monthly", element: <UserMonthlyReport/> },
-          { path: "employee-card", element: <ProfileCard/> },
+          { path: "user-monthly", element: <UserMonthlyReport /> },
+          { path: "employee-card", element: <ProfileCard /> },
           { path: "instructor-overtime", element: <InstructorOvertime /> },
+          { path: "fuel-requisition", element: <FuelRequistion /> },
         ],
       },
     ],
