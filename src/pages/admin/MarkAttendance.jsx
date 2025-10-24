@@ -29,7 +29,7 @@ export default function MarkAttendance() {
     setDate,
     changes,
     setRowChange,
-    resetRow,
+    resetRow, // not used here but exported if you want a "Reset" button later
     markOne,
     saveAll,
     saving,
@@ -39,7 +39,7 @@ export default function MarkAttendance() {
 
   const loading = usersLoading || attendanceLoading;
 
-  // ✅ Do NOT auto-mark late/present—only set the time
+  // ✅ Don’t auto-mark status here — only set the times; status stays explicit
   const handleCheckInChange = React.useCallback(
     (id, hhmm) => {
       setRowChange(id, { checkIn: hhmm });

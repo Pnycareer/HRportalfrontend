@@ -28,6 +28,8 @@ const DESIGNATIONS = [
   "CSR",
   "Office Boy",
   "Instructor",
+  "Hr executive",
+  "MTO Hr",
   "HOD",
 ];
 

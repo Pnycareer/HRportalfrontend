@@ -19,17 +19,42 @@ function isoToHHMM(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d)) return "";
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
 }
 
 function ymdAndTimeToIso(ymd, hhmm) {
   if (!hhmm) return null;
-  return new Date(`${ymd}T${hhmm}:00Z`).toISOString();
+  const [year, month, day] = ymd.split("-").map(Number);
+  const [hour, minute] = hhmm.split(":").map(Number);
+  if (
+    [year, month, day, hour, minute].some(
+      (n) => !Number.isFinite(n) || Number.isNaN(n)
+    )
+  ) {
+    return null;
+  }
+  const local = new Date();
+  local.setFullYear(year, month - 1, day);
+  local.setHours(hour, minute, 0, 0);
+  return local.toISOString();
 }
 
-const OFF = new Set(['absent', 'leave', 'official_off']);
+// Flexible OFF detection: treat anything with "off" plus absent/leave as OFF
+const OFF = {
+  has(status) {
+    if (!status) return false;
+    const s = String(status).toLowerCase();
+    return s.includes("off") || s === "absent" || s === "leave";
+  }
+};
+
+function minutesFromApi(data) {
+  if (data?.workedMinutes != null) return data.workedMinutes;
+  if (data?.workedHours != null) return Math.round(data.workedHours * 60);
+  return null;
+}
 
 export default function useAttendance() {
   const [date, setDate] = React.useState(todayYMD);
@@ -46,15 +71,23 @@ export default function useAttendance() {
     (async () => {
       setLoading(true);
       try {
-        const { data } = await api.get("/api/attendance/by-date", { params: { date } });
+        const timezoneOffset = new Date().getTimezoneOffset();
+        const { data } = await api.get("/api/attendance/by-date", {
+          params: { date, timezoneOffset },
+        });
         const map = {};
         for (const r of data?.records || []) {
+          const workedMinutes =
+            r.workedMinutes ?? (r.workedHours != null ? Math.round(r.workedHours * 60) : null);
+
           map[r.userId] = {
             status: r.status,
             note: r.note || "",
             checkIn: isoToHHMM(r.checkIn),
             checkOut: isoToHHMM(r.checkOut),
-            workedMinutes: r.workedMinutes ?? null,
+            checkInSnapshotUrl: r.checkInSnapshotUrl || null,
+            checkOutSnapshotUrl: r.checkOutSnapshotUrl || null,
+            workedMinutes,
           };
         }
         if (alive) {
@@ -86,13 +119,15 @@ export default function useAttendance() {
   }
 
   // async function markOne(userId) {
-  //   const draft = changes[userId];
-  //   if (!draft?.status) return;
+  //   const draft = changes[userId] || {};
+  //   const current = persisted[userId] || {};
+  //   const merged = { ...current, ...draft };
+  //   if (!merged.status) return;
 
   //   const isoDate = toUtcIsoMidnight(date);
-  //   const merged = { ...(persisted[userId] || {}), ...(draft || {}) };
-  //   const ci = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkIn || "");
-  //   const co = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkOut || "");
+  //   const isOff = OFF.has(merged.status);
+  //   const ciIso = isOff ? null : ymdAndTimeToIso(date, merged.checkIn || "");
+  //   const coIso = isOff ? null : ymdAndTimeToIso(date, merged.checkOut || "");
 
   //   setSaving(true);
   //   try {
@@ -101,18 +136,25 @@ export default function useAttendance() {
   //       date: isoDate,
   //       status: merged.status,
   //       note: merged.note || "",
-  //       checkIn: ci,
-  //       checkOut: co,
+  //       checkIn: ciIso,
+  //       checkOut: coIso,
   //     });
+
+  //     const nextStatus = data?.status ?? merged.status;
+  //     const nextIsOff = OFF.has(nextStatus);
+
+  //     // if API didn’t echo times, fall back to what we sent
+  //     const nextCheckInIso  = nextIsOff ? null : (data?.checkIn  ?? ciIso);
+  //     const nextCheckOutIso = nextIsOff ? null : (data?.checkOut ?? coIso);
 
   //     setPersisted(prev => ({
   //       ...prev,
   //       [userId]: {
-  //         status: data.status,
-  //         note: data.note || "",
-  //         checkIn: OFF.has(data.status) ? "" : isoToHHMM(data.checkIn),
-  //         checkOut: OFF.has(data.status) ? "" : isoToHHMM(data.checkOut),
-  //         workedMinutes: data.workedMinutes ?? null,
+  //         status: nextStatus,
+  //         note: data?.note ?? (merged.note || ""),
+  //         checkIn: nextCheckInIso ? isoToHHMM(nextCheckInIso) : "",
+  //         checkOut: nextCheckOutIso ? isoToHHMM(nextCheckOutIso) : "",
+  //         workedMinutes: minutesFromApi(data),
   //       },
   //     }));
   //     resetRow(userId);
@@ -125,17 +167,32 @@ export default function useAttendance() {
   //   }
   // }
 
-  async function markOne(userId) {
+// hooks/useAttendance.js
+
+async function markOne(userId) {
   const draft = changes[userId] || {};
   const current = persisted[userId] || {};
   const merged = { ...current, ...draft };
-
-  // require status from merged (works even if it's only in persisted)
   if (!merged.status) return;
 
   const isoDate = toUtcIsoMidnight(date);
-  const ci = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkIn || "");
-  const co = OFF.has(merged.status) ? null : ymdAndTimeToIso(date, merged.checkOut || "");
+
+  const hasDraftCI = Object.prototype.hasOwnProperty.call(draft, "checkIn");
+  const hasDraftCO = Object.prototype.hasOwnProperty.call(draft, "checkOut");
+
+  const baseCI = current.checkIn || "";
+  const baseCO = current.checkOut || "";
+
+  const ciHHMM = hasDraftCI ? (draft.checkIn || "") : baseCI;
+  const coHHMM = hasDraftCO ? (draft.checkOut || "") : baseCO;
+
+  const isOff = (s => {
+    const x = String(s || "").toLowerCase();
+    return x.includes("off") || x === "absent" || x === "leave";
+  })(merged.status);
+
+  const ciIso = isOff ? null : (ciHHMM ? ymdAndTimeToIso(date, ciHHMM) : null);
+  const coIso = isOff ? null : (coHHMM ? ymdAndTimeToIso(date, coHHMM) : null);
 
   setSaving(true);
   try {
@@ -144,18 +201,36 @@ export default function useAttendance() {
       date: isoDate,
       status: merged.status,
       note: merged.note || "",
-      checkIn: ci,
-      checkOut: co,
+      checkIn: ciIso,
+      checkOut: coIso,
     });
+
+    const nextStatus = data?.status ?? merged.status;
+    const nextIsOff = (s => {
+      const x = String(s || "").toLowerCase();
+      return x.includes("off") || x === "absent" || x === "leave";
+    })(nextStatus);
+
+    const nextCheckInIso  = nextIsOff ? null : (data?.checkIn  ?? ciIso);
+    const nextCheckOutIso = nextIsOff ? null : (data?.checkOut ?? coIso);
 
     setPersisted(prev => ({
       ...prev,
       [userId]: {
-        status: data.status,
-        note: data.note || "",
-        checkIn: OFF.has(data.status) ? "" : isoToHHMM(data.checkIn),
-        checkOut: OFF.has(data.status) ? "" : isoToHHMM(data.checkOut),
-        workedMinutes: data.workedMinutes ?? null,
+        status: nextStatus,
+        note: data?.note ?? (merged.note || ""),
+        checkIn: nextCheckInIso ? isoToHHMM(nextCheckInIso) : "",
+        checkOut: nextCheckOutIso ? isoToHHMM(nextCheckOutIso) : "",
+        checkInSnapshotUrl: nextIsOff
+          ? null
+          : (data?.checkInSnapshotUrl ?? prev[userId]?.checkInSnapshotUrl ?? null),
+        checkOutSnapshotUrl: nextIsOff
+          ? null
+          : (data?.checkOutSnapshotUrl ?? prev[userId]?.checkOutSnapshotUrl ?? null),
+        workedMinutes:
+          data?.workedMinutes != null
+            ? data.workedMinutes
+            : (data?.workedHours != null ? Math.round(data.workedHours * 60) : prev[userId]?.workedMinutes ?? null),
       },
     }));
     resetRow(userId);
@@ -167,6 +242,7 @@ export default function useAttendance() {
     setSaving(false);
   }
 }
+
 
 
   async function saveAll() {
@@ -191,23 +267,32 @@ export default function useAttendance() {
     const isoDate = toUtcIsoMidnight(date);
     setSaving(true);
     try {
-      const { data } = await api.post("/api/attendance/bulk", { date: isoDate, records });
-      // re-fetch (safe) OR optimistically merge—let’s merge to stay snappy:
-      // However, workedMinutes comes from server; best to GET after bulk
+      await api.post("/api/attendance/bulk", { date: isoDate, records });
+      // refetch to get authoritative workedMinutes from server
       try {
-        const rd = await api.get("/api/attendance/by-date", { params: { date } });
+      const timezoneOffset = new Date().getTimezoneOffset();
+      const rd = await api.get("/api/attendance/by-date", {
+        params: { date, timezoneOffset },
+      });
         const map = {};
         for (const r of rd.data?.records || []) {
+          const workedMinutes =
+            r.workedMinutes ?? (r.workedHours != null ? Math.round(r.workedHours * 60) : null);
+
           map[r.userId] = {
             status: r.status,
             note: r.note || "",
             checkIn: isoToHHMM(r.checkIn),
             checkOut: isoToHHMM(r.checkOut),
-            workedHours: r.workedHours ?? null, // NEW (hours)
+            checkInSnapshotUrl: r.checkInSnapshotUrl || null,
+            checkOutSnapshotUrl: r.checkOutSnapshotUrl || null,
+            workedMinutes,
           };
         }
         setPersisted(map);
-      } catch { /* ignore */ }
+      } catch {
+        // ignore fetch errors, persisted stays optimistic
+      }
 
       setChanges({});
       toast.success("Attendance saved");

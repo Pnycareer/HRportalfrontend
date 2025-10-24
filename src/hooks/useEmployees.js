@@ -33,8 +33,12 @@ export default function useEmployees() {
 
   // local patch helper
   function patchLocal(id, patch) {
-    setEmployees((prev) => prev.map((u) => (u._id === id ? { ...u, ...patch } : u)));
-    setFiltered((prev) => prev.map((u) => (u._id === id ? { ...u, ...patch } : u)));
+    setEmployees((prev) =>
+      prev.map((u) => (u._id === id ? { ...u, ...patch } : u))
+    );
+    setFiltered((prev) =>
+      prev.map((u) => (u._id === id ? { ...u, ...patch } : u))
+    );
   }
 
   // fetch users
@@ -48,7 +52,9 @@ export default function useEmployees() {
 
       // build branches (case-insensitive), sorted
       const uniqueBranches = Array.from(
-        new Set(list.map((u) => (u.branch || "").trim().toLowerCase()).filter(Boolean))
+        new Set(
+          list.map((u) => (u.branch || "").trim().toLowerCase()).filter(Boolean)
+        )
       )
         .map((b) => b.charAt(0).toUpperCase() + b.slice(1))
         .sort((a, b) => a.localeCompare(b));
@@ -56,13 +62,21 @@ export default function useEmployees() {
 
       // initial departments = all departments across all branches
       const uniqueDepts = Array.from(
-        new Set(list.map((u) => (u.department || "").trim().toLowerCase()).filter(Boolean))
+        new Set(
+          list
+            .map((u) => (u.department || "").trim().toLowerCase())
+            .filter(Boolean)
+        )
       )
         .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
         .sort((a, b) => a.localeCompare(b));
       setDepartments(["all", ...uniqueDepts]);
     } catch (err) {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to fetch employees");
+      toast.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to fetch employees"
+      );
     } finally {
       setLoading(false);
     }
@@ -85,7 +99,11 @@ export default function useEmployees() {
           );
 
     const branchDepts = Array.from(
-      new Set(pool.map((u) => (u.department || "").trim().toLowerCase()).filter(Boolean))
+      new Set(
+        pool
+          .map((u) => (u.department || "").trim().toLowerCase())
+          .filter(Boolean)
+      )
     )
       .map((d) => d.charAt(0).toUpperCase() + d.slice(1))
       .sort((a, b) => a.localeCompare(b));
@@ -138,7 +156,11 @@ export default function useEmployees() {
       toast.success(isApproved ? "Approved" : "Rejected");
     } catch (err) {
       patchLocal(id, { isApproved: before?.isApproved ?? false });
-      toast.error(err?.response?.data?.message || err?.message || "Failed to update approval");
+      toast.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to update approval"
+      );
     }
   }
 
@@ -152,25 +174,35 @@ export default function useEmployees() {
     } catch (err) {
       setEmployees(before);
       setFiltered(before);
-      toast.error(err?.response?.data?.message || err?.message || "Failed to delete");
+      toast.error(
+        err?.response?.data?.message || err?.message || "Failed to delete"
+      );
     }
   }
 
-  async function updateEmployee(id, payload) {
-    const before = employees.find((u) => u._id === id);
-    // optimistic
-    patchLocal(id, payload);
-    try {
-      const { data } = await api.patch(`/api/users/edit/${id}`, payload);
-      const srv = normalizeServerUser(data?.user) || payload;
-      patchLocal(id, srv);
-      toast.success("Updated");
-    } catch (err) {
-      if (before) patchLocal(id, before);
-      toast.error(err?.response?.data?.message || err?.message || "Failed to update");
-      throw err;
-    }
+ async function updateEmployee(id, payload, opts = {}) {
+  const before = employees.find((u) => u._id === id);
+
+  // optimistic update
+  patchLocal(id, payload);
+
+  try {
+    const { data } = await api.patch(`/api/users/edit/${id}`, payload);
+    const srv = normalizeServerUser(data?.user) || payload;
+    patchLocal(id, srv);
+
+    // ✅ only toast if not silenced
+    if (!opts.silent) toast.success("Updated");
+  } catch (err) {
+    // revert local state
+    if (before) patchLocal(id, before);
+    toast.error(
+      err?.response?.data?.message || err?.message || "Failed to update"
+    );
+    throw err;
   }
+}
+
 
   async function updateEmployeeRole(id, role) {
     const before = employees.find((u) => u._id === id);
@@ -182,18 +214,22 @@ export default function useEmployees() {
       toast.success("Role updated");
     } catch (err) {
       patchLocal(id, { role: before?.role || "employee" });
-      toast.error(err?.response?.data?.message || err?.message || "Failed to update role");
+      toast.error(
+        err?.response?.data?.message || err?.message || "Failed to update role"
+      );
     }
   }
 
   // 👇 NEW: update salary (number or null to clear)
-  async function updateEmployeeSalary(id, salary) {
+  async function updateEmployeeSalary(id, salary, opts = {}) {
     // accept number | string | null | ""
     let num = null;
     if (salary !== null && salary !== "") {
       const n = Number(salary);
       if (!Number.isFinite(n) || n < 0) {
-        toast.error("Salary must be a non-negative number (or leave blank to clear).");
+        toast.error(
+          "Salary must be a non-negative number (or leave blank to clear)."
+        );
         throw new Error("invalid-salary");
       }
       // normalize to 2dp
@@ -203,14 +239,22 @@ export default function useEmployees() {
     const before = employees.find((u) => u._id === id);
     patchLocal(id, { salary: num });
     try {
-      const { data } = await api.patch(`/api/users/edit/${id}`, { salary: num });
+      const { data } = await api.patch(`/api/users/edit/${id}`, {
+        salary: num,
+      });
       const srv = normalizeServerUser(data?.user);
       if (srv) patchLocal(id, srv);
-      toast.success("Salary updated");
+
+      // 👇 only show toast if not silenced by caller
+      if (!opts.silent) toast.success("Salary updated");
     } catch (err) {
       // revert
       patchLocal(id, { salary: before?.salary ?? null });
-      toast.error(err?.response?.data?.message || err?.message || "Failed to update salary");
+      toast.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to update salary"
+      );
       throw err;
     }
   }

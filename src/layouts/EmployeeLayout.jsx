@@ -21,6 +21,15 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { LABELS } from "@/components/constants/attendance";
 import {
   Menu,
   ChevronLeft,
@@ -41,8 +50,12 @@ import {
   CalendarClock,
   Headphones,
   Bell,
+  FileText,
+  Loader2,
+  Camera,
 } from "lucide-react";
-import { FileText } from "lucide-react";
+import { toast } from "sonner";
+import api from "@/lib/axios";
 
 function formatNotificationDateRange(from, to) {
   try {
@@ -85,6 +98,26 @@ function formatRelativeTimestamp(value) {
   } catch {
     return "just now";
   }
+}
+
+function formatTime(iso) {
+  if (!iso) return "--";
+  try {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "--";
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "--";
+  }
+}
+
+function formatLocalDateKey(input = new Date()) {
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 const BASE_NAV = [
@@ -270,13 +303,292 @@ export default function EmployeeLayout({ title = "Employee" }) {
 
   const firstName = user?.fullName?.split(" ")?.[0] || "there";
 
+  const [now, setNow] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const id = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const clockTime = React.useMemo(
+    () => now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    [now]
+  );
+  const clockDay = React.useMemo(
+    () => now.toLocaleDateString(undefined, { weekday: "long" }),
+    [now]
+  );
+  const clockDate = React.useMemo(
+    () => now.toLocaleDateString(undefined, { day: "2-digit", month: "long", year: "numeric" }),
+    [now]
+  );
+
+  const userId = React.useMemo(() => {
+    if (!user) return null;
+    const identifier = user._id ?? user.id ?? null;
+    return identifier ? String(identifier) : null;
+  }, [user]);
+
+  const [selfForm, setSelfForm] = React.useState({ password: "", note: "" });
+  const [submittingAction, setSubmittingAction] = React.useState(null);
+  const [loadingToday, setLoadingToday] = React.useState(false);
+  const [todayRecord, setTodayRecord] = React.useState(null);
+  const [selfieModalOpen, setSelfieModalOpen] = React.useState(false);
+  const [selfieAction, setSelfieAction] = React.useState(null);
+  const [cameraStream, setCameraStream] = React.useState(null);
+  const [cameraLoading, setCameraLoading] = React.useState(false);
+  const [cameraError, setCameraError] = React.useState(null);
+  const [capturedImage, setCapturedImage] = React.useState(null);
+  const videoRef = React.useRef(null);
+  const canvasRef = React.useRef(null);
+
+  const fetchTodayRecord = React.useCallback(async () => {
+    if (!userId) return;
+    setLoadingToday(true);
+    try {
+      const todayKey = formatLocalDateKey();
+      const timezoneOffset = new Date().getTimezoneOffset();
+      const { data } = await api.get("/api/attendance/by-date", {
+        params: { date: todayKey, timezoneOffset },
+      });
+      const current = data?.records?.find((record) => record.userId === userId);
+      setTodayRecord(current || null);
+    } catch (error) {
+      console.error("Failed to load today's attendance", error);
+      toast.error(error.message || "Failed to load today's attendance");
+    } finally {
+      setLoadingToday(false);
+    }
+  }, [userId]);
+
+  React.useEffect(() => {
+    fetchTodayRecord();
+  }, [fetchTodayRecord]);
+
+  const hasCheckedIn = Boolean(todayRecord?.checkIn);
+  const hasCheckedOut = Boolean(todayRecord?.checkOut);
+  const todayStatusLabel = todayRecord?.status
+    ? LABELS?.[todayRecord.status] ?? todayRecord.status.replace(/_/g, " ")
+    : "Not marked yet";
+  const checkInTime = hasCheckedIn ? formatTime(todayRecord.checkIn) : "--";
+  const checkOutTime = hasCheckedOut ? formatTime(todayRecord.checkOut) : "--";
+
+  const handleSelfAttendance = React.useCallback(
+    async (action, snapshot) => {
+      if (!userId) return;
+      if (!selfForm.password?.trim()) {
+        toast.error("Enter your password to continue");
+        return;
+      }
+      if (action === "check-in" && hasCheckedIn) {
+        toast.error("Check-in already recorded for today");
+        return;
+      }
+      if (action === "check-out") {
+        if (!hasCheckedIn) {
+          toast.error("Check-in first before checking out");
+          return;
+        }
+        if (hasCheckedOut) {
+          toast.error("Check-out already recorded for today");
+          return;
+        }
+      }
+
+      if (!snapshot || typeof snapshot !== "string") {
+        toast.error("Capture your face before confirming");
+        return;
+      }
+
+      setSubmittingAction(action);
+      try {
+        const timezoneOffset = new Date().getTimezoneOffset();
+        const payload = {
+          action,
+          password: selfForm.password,
+          timezoneOffset,
+          snapshot,
+        };
+        const trimmedNote = selfForm.note?.trim();
+        if (trimmedNote) payload.note = trimmedNote;
+
+        const { data } = await api.post("/api/attendance/self/mark", payload);
+        toast.success(
+          data?.message ||
+            (action === "check-in"
+              ? "Check-in recorded"
+              : "Check-out recorded")
+        );
+        setSelfForm({ password: "", note: "" });
+        await fetchTodayRecord();
+        return true;
+      } catch (error) {
+        toast.error(
+          error.message ||
+            `Unable to ${action === "check-in" ? "check in" : "check out"}`
+        );
+        setSelfForm((prev) => ({ ...prev, password: "" }));
+        return false;
+      } finally {
+        setSubmittingAction(null);
+      }
+    },
+    [
+      userId,
+      selfForm.password,
+      selfForm.note,
+      hasCheckedIn,
+      hasCheckedOut,
+      fetchTodayRecord,
+    ]
+  );
+
+  const stopCamera = React.useCallback(() => {
+    setCameraStream((stream) => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      return null;
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (!selfieModalOpen) {
+      setCapturedImage(null);
+      setCameraError(null);
+      stopCamera();
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError("Camera access is not supported in this browser");
+      setCameraLoading(false);
+      return;
+    }
+
+    let canceled = false;
+    setCameraLoading(true);
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "user" } })
+      .then((stream) => {
+        if (canceled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        setCameraStream(stream);
+        setCameraError(null);
+      })
+      .catch((error) => {
+        setCameraError(
+          error?.message || "Unable to access the device camera. Check permissions."
+        );
+      })
+      .finally(() => {
+        if (!canceled) {
+          setCameraLoading(false);
+        }
+      });
+
+    return () => {
+      canceled = true;
+      stopCamera();
+    };
+  }, [selfieModalOpen, stopCamera]);
+
+  React.useEffect(() => {
+    const element = videoRef.current;
+    if (!element) return;
+    if (cameraStream) {
+      element.srcObject = cameraStream;
+      element.play().catch(() => {});
+    } else {
+      element.srcObject = null;
+    }
+  }, [cameraStream]);
+
+  const initiateSelfie = React.useCallback(
+    (action) => {
+      if (!selfForm.password?.trim()) {
+        toast.error("Enter your password to continue");
+        return;
+      }
+      if (action === "check-in" && hasCheckedIn) {
+        toast.error("Check-in already recorded for today");
+        return;
+      }
+      if (action === "check-out") {
+        if (!hasCheckedIn) {
+          toast.error("Check-in first before checking out");
+          return;
+        }
+        if (hasCheckedOut) {
+          toast.error("Check-out already recorded for today");
+          return;
+        }
+      }
+      setCapturedImage(null);
+      setCameraError(null);
+      setSelfieAction(action);
+      setSelfieModalOpen(true);
+    },
+    [selfForm.password, hasCheckedIn, hasCheckedOut]
+  );
+
+  const captureSnapshot = React.useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) {
+      toast.error("Camera not ready yet");
+      return;
+    }
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height) {
+      toast.error("Camera is still initializing. Please try again");
+      return;
+    }
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    setCapturedImage(dataUrl);
+  }, []);
+
+  const closeSelfieModal = React.useCallback(() => {
+    setSelfieModalOpen(false);
+    setSelfieAction(null);
+    setCapturedImage(null);
+    setCameraError(null);
+    setCameraLoading(false);
+  }, []);
+
+  const confirmSelfieSubmission = React.useCallback(async () => {
+    if (!selfieAction) return;
+    if (!capturedImage) {
+      toast.error("Capture your face before confirming");
+      return;
+    }
+    const ok = await handleSelfAttendance(selfieAction, capturedImage);
+    if (ok) {
+      closeSelfieModal();
+    }
+  }, [selfieAction, capturedImage, handleSelfAttendance, closeSelfieModal]);
+
+  const isSubmitting = Boolean(submittingAction);
+  const disableCheckIn = isSubmitting || loadingToday || hasCheckedIn;
+  const disableCheckOut =
+    isSubmitting || loadingToday || !hasCheckedIn || hasCheckedOut;
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-32 -top-24 h-[420px] w-[420px] rounded-full bg-primary/20 blur-3xl" />
-        <div className="absolute bottom-[-180px] right-[-140px] h-[520px] w-[520px] rounded-full bg-pink-500/20 blur-3xl" />
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      </div>
+    <>
+      <div className="relative min-h-screen overflow-hidden bg-background">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -left-32 -top-24 h-[420px] w-[420px] rounded-full bg-primary/20 blur-3xl" />
+          <div className="absolute bottom-[-180px] right-[-140px] h-[520px] w-[520px] rounded-full bg-pink-500/20 blur-3xl" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        </div>
 
       <div className="relative z-10 flex min-h-screen flex-col">
         <header className="sticky top-0 z-40 border-b border-white/10 bg-background/80 backdrop-blur-xl">
@@ -546,6 +858,129 @@ export default function EmployeeLayout({ title = "Employee" }) {
                   </Avatar>
                 </div>
               </div>
+              <div className="relative z-10 mt-8">
+                <div className="rounded-2xl border border-white/10 bg-background/80 p-6 shadow-[0_20px_45px_-18px_rgba(15,23,42,0.55)] backdrop-blur">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-base font-semibold text-foreground">
+                        Mark today&apos;s attendance
+                      </h2>
+                      <p className="mt-1 max-w-lg text-sm text-muted-foreground">
+                        Check in or out yourself. We confirm it&apos;s really you by asking for your account password.
+                      </p>
+                    </div>
+                    {loadingToday && (
+                      <span className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Syncing
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-6 grid gap-4 sm:grid-cols-4">
+                    <div className="rounded-xl border border-primary/30 bg-primary/10 p-4 backdrop-blur">
+                      <span className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
+                        Live clock
+                      </span>
+                      <div className="mt-2 text-black text-2xl font-semibold">
+                        {clockTime}
+                      </div>
+                      <div className="mt-2 text-sm font-medium uppercase tracking-[0.2em] text-primary/80">
+                        {clockDay}
+                      </div>
+                      <div className="mt-1 text-sm text-primary/80">{clockDate}</div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                      <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                        Status
+                      </span>
+                      <div className="mt-2 text-lg font-semibold text-foreground">
+                        {todayStatusLabel}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                      <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                        Check-in
+                      </span>
+                      <div className="mt-2 text-lg font-semibold text-foreground">
+                        {checkInTime}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                      <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                        Check-out
+                      </span>
+                      <div className="mt-2 text-lg font-semibold text-foreground">
+                        {checkOutTime}
+                      </div>
+                    </div>
+                  </div>
+                  {todayRecord?.note ? (
+                    <div className="mt-4 rounded-xl border border-amber-500/30 bg-gray-500 p-4 text-sm text-amber-200/90">
+                      <span className="font-medium uppercase tracking-[0.2em] text-amber-200">Note on file</span>
+                      <p className="mt-2 leading-snug text-amber-50/90">
+                        {todayRecord.note}
+                      </p>
+                    </div>
+                  ) : null}
+                  <div className="mt-6 grid gap-4">
+                    <label className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+                      Account password
+                    </label>
+                    <Input
+                      type="password"
+                      value={selfForm.password}
+                      onChange={(event) =>
+                        setSelfForm((prev) => ({
+                          ...prev,
+                          password: event.target.value,
+                        }))
+                      }
+                      placeholder="Enter your password to confirm"
+                      disabled={isSubmitting}
+                      className="border-white/10 bg-white/5 backdrop-blur"
+                    />
+                    <label className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+                      Note (optional)
+                    </label>
+                    <Textarea
+                      value={selfForm.note}
+                      onChange={(event) =>
+                        setSelfForm((prev) => ({
+                          ...prev,
+                          note: event.target.value,
+                        }))
+                      }
+                      placeholder="Anything your manager should know about today?"
+                      rows={3}
+                      className="border-white/10 bg-white/5 backdrop-blur"
+                      disabled={isSubmitting}
+                    />
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      <Button
+                        onClick={() => initiateSelfie("check-in")}
+                        disabled={disableCheckIn || !selfForm.password.trim()}
+                        className="flex items-center gap-2"
+                      >
+                        {submittingAction === "check-in" && (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        )}
+                        {hasCheckedIn ? "Check-in complete" : "Check in"}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => initiateSelfie("check-out")}
+                        disabled={disableCheckOut || !selfForm.password.trim()}
+                        className="flex items-center gap-2"
+                      >
+                        {submittingAction === "check-out" && (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        )}
+                        {hasCheckedOut ? "Check-out complete" : "Check out"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </section>
 
             <section className="rounded-3xl border border-white/10 bg-card/70 p-6 shadow-[0_25px_50px_-18px_rgba(15,23,42,0.55)] backdrop-blur-xl">
@@ -554,7 +989,92 @@ export default function EmployeeLayout({ title = "Employee" }) {
           </main>
         </div>
       </div>
-    </div>
+      </div>
+      <Dialog
+        open={selfieModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeSelfieModal();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Capture face snapshot</DialogTitle>
+            <DialogDescription>
+              {selfieAction === "check-out"
+                ? "Take a quick photo to confirm your check-out."
+                : "Take a quick photo to confirm your check-in."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {cameraError ? (
+              <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                {cameraError}
+              </div>
+            ) : (
+              <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
+                {capturedImage ? (
+                  <img
+                    src={capturedImage}
+                    alt="Captured face"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="h-full w-full object-cover"
+                  />
+                )}
+                {cameraLoading && (
+                  <div className="absolute inset-0 grid place-items-center gap-2 bg-black/60 text-sm text-white">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Starting camera…
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={captureSnapshot}
+                disabled={
+                  cameraLoading ||
+                  !!capturedImage ||
+                  !cameraStream ||
+                  !!cameraError
+                }
+                className="flex items-center gap-2"
+              >
+                <Camera className="h-4 w-4" />
+                Capture photo
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setCapturedImage(null)}
+                disabled={cameraLoading || !capturedImage}
+              >
+                Retake
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmSelfieSubmission}
+                disabled={!capturedImage || !!cameraError || isSubmitting}
+                className="ml-auto flex items-center gap-2"
+              >
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Confirm {selfieAction === "check-out" ? "check-out" : "check-in"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <canvas ref={canvasRef} className="hidden" />
+    </>
   );
 }
-
