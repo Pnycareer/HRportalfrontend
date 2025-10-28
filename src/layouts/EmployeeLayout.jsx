@@ -858,7 +858,7 @@ export default function EmployeeLayout({ title = "Employee" }) {
                   </Avatar>
                 </div>
               </div>
-              <div className="relative z-10 mt-8">
+              {/* <div className="relative z-10 mt-8">
                 <div className="rounded-2xl border border-white/10 bg-background/80 p-6 shadow-[0_20px_45px_-18px_rgba(15,23,42,0.55)] backdrop-blur">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
@@ -980,7 +980,7 @@ export default function EmployeeLayout({ title = "Employee" }) {
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
             </section>
 
             <section className="rounded-3xl border border-white/10 bg-card/70 p-6 shadow-[0_25px_50px_-18px_rgba(15,23,42,0.55)] backdrop-blur-xl">

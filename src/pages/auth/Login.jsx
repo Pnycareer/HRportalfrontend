@@ -1,52 +1,112 @@
-// src/pages/Login.jsx
-import React from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { toast } from 'sonner'
-import { useAuth } from '@/context/AuthContext'
-import InputField from '@/components/form/InputField'
-import { useNavigate, Link, Navigate, useLocation } from 'react-router-dom'
+// src/pages/auth/Login.jsx
+import React from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
+import InputField from "@/components/form/InputField";
+import { useNavigate, Link, Navigate, useLocation } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+
+const ROLE_LABELS = {
+  superadmin: "Super Admin",
+  admin: "Admin",
+  hr: "HR",
+  employee: "Employee",
+};
+
+function formatRole(role) {
+  const key = String(role || "").toLowerCase();
+  return ROLE_LABELS[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : "Unknown");
+}
 
 function routeForRole(role) {
-  console.log(role)
-  if (role === 'employee') return '/employee'
-  if (role === 'admin' || role === 'superadmin' || role === 'hr') return '/admin'
-  return '/' // fallback
+  const value = String(role || "").toLowerCase();
+  if (value === "employee") return "/employee";
+  if (value === "admin" || value === "superadmin" || value === "hr") return "/admin";
+  return "/";
 }
 
 export default function Login() {
-  const { user, loading: authLoading, login } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const redirectFrom = location.state?.from?.pathname
+  const { user, loading: authLoading, login, switchRole } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const redirectFrom = location.state?.from?.pathname;
 
-  const [form, setForm] = React.useState({ email: '', password: '' })
-  const [submitting, setSubmitting] = React.useState(false)
+  const [form, setForm] = React.useState({ email: "", password: "" });
+  const [submitting, setSubmitting] = React.useState(false);
+  const [rolePrompt, setRolePrompt] = React.useState(null);
+  const [selectingRole, setSelectingRole] = React.useState(null);
 
-  function update(e) {
-    const { name, value } = e.target
-    setForm((s) => ({ ...s, [name]: value }))
-  }
+  const update = (e) => {
+    const { name, value } = e.target;
+    setForm((s) => ({ ...s, [name]: value }));
+  };
 
-  async function onSubmit(e) {
-    e.preventDefault()
-    setSubmitting(true)
+  const handleRoleSelection = async (role) => {
+    setSelectingRole(role);
     try {
-      const loggedInUser = await login(form)
-
-      const u = loggedInUser || (typeof window !== 'undefined' ? null : null) || user
-      const target = redirectFrom || routeForRole(u?.role)
-      toast.success('Welcome back!')
-      navigate(target, { replace: true })
+      await switchRole(role);
+      toast.success(`Switched to ${formatRole(role)} view`);
+      setRolePrompt(null);
+      navigate(routeForRole(role), { replace: true });
     } catch (err) {
-      toast.error(err?.message || 'Invalid credentials / not approved / email not verified')
+      toast.error(
+        err?.response?.data?.message || err?.message || "Failed to switch role"
+      );
     } finally {
-      setSubmitting(false)
+      setSelectingRole(null);
     }
-  }
+  };
 
-  if (!authLoading && user) {
-    return <Navigate to={redirectFrom || routeForRole(user.role)} replace />
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const loggedInUser = await login(form);
+      const roles = Array.isArray(loggedInUser?.roles) ? loggedInUser.roles : [];
+      const activeRole =
+        loggedInUser?.activeRole ||
+        (roles.length ? roles[0] : null);
+
+      toast.success("Welcome back!");
+
+      if (roles.length > 1) {
+        setRolePrompt({
+          roles,
+          activeRole,
+        });
+      } else {
+        const target = redirectFrom || routeForRole(activeRole);
+        navigate(target, { replace: true });
+      }
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Invalid credentials / not approved / email not verified"
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!authLoading && user && !rolePrompt) {
+    return <Navigate to={redirectFrom || routeForRole(user.activeRole)} replace />;
   }
 
   return (
@@ -119,14 +179,14 @@ export default function Login() {
                     disabled={submitting || authLoading}
                     className="h-12 w-full rounded-xl text-base font-medium shadow-lg shadow-primary/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl disabled:translate-y-0"
                   >
-                    {submitting || authLoading ? 'Signing in...' : 'Sign in'}
+                    {submitting || authLoading ? "Signing in..." : "Sign in"}
                   </Button>
                 </form>
               </CardContent>
               <CardFooter className="flex flex-col gap-3 text-center text-sm text-slate-600 dark:text-slate-300">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Need access?</p>
                 <div>
-                  Don't have an account yet?{' '}
+                  Don't have an account yet?{" "}
                   <Link to="/register" className="font-medium text-primary hover:underline">
                     Request onboarding
                   </Link>
@@ -136,6 +196,40 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      <Dialog open={!!rolePrompt} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select a dashboard</DialogTitle>
+            <DialogDescription>
+              You have access to multiple portals. Choose how you want to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 pt-2">
+            {(rolePrompt?.roles || []).map((role) => {
+              const isCurrent = rolePrompt?.activeRole === role;
+              return (
+                <Button
+                  key={role}
+                  variant={isCurrent ? "default" : "outline"}
+                  disabled={Boolean(selectingRole)}
+                  className="h-12 justify-between text-sm font-medium capitalize"
+                  onClick={() => handleRoleSelection(role)}
+                >
+                  <span>{formatRole(role)} Portal</span>
+                  {selectingRole === role ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {isCurrent ? "Default" : "Switch"}
+                    </span>
+                  )}
+                </Button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
-  )
+  );
 }

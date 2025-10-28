@@ -1,24 +1,45 @@
-// src/components/employees/EmployeesTable.jsx
+﻿// src/components/employees/EmployeesTable.jsx
 import React from "react";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-// ❌ remove these if unused now
-// import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Check, X, Pencil, Trash2 } from "lucide-react";
 
-// const ROLES = ["superadmin", "admin", "hr", "employee"]; // ❌ not needed now
+function formatRoles(rolesOrRole) {
+  const roles = Array.isArray(rolesOrRole)
+    ? rolesOrRole
+    : rolesOrRole
+    ? [rolesOrRole]
+    : [];
+  if (!roles.length) return "â€”";
+  return roles
+    .map((role) =>
+      role ? role.charAt(0).toUpperCase() + role.slice(1) : ""
+    )
+    .filter(Boolean)
+    .join(", ");
+}
 
 export default function EmployeesTable({
   rows = [],
   onEdit,
   onDelete,
-  // onChangeRole,  // ❌ remove
   onApprove,
   onReject,
 }) {
@@ -42,7 +63,7 @@ export default function EmployeesTable({
               <TableHead className="w-[120px]">Employee ID</TableHead>
               <TableHead className="w-[260px]">Email</TableHead>
               <TableHead className="w-[160px]">Department</TableHead>
-              <TableHead className="w-[180px]">Role</TableHead>
+              <TableHead className="w-[180px]">Roles</TableHead>
               <TableHead className="w-[180px]">Status</TableHead>
               <TableHead className="w-[220px] text-right">Actions</TableHead>
             </TableRow>
@@ -58,7 +79,9 @@ export default function EmployeesTable({
                   <div className="max-w-[240px] truncate">{u.fullName}</div>
                 </TableCell>
 
-                <TableCell className="text-muted-foreground">{u.employeeId}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {u.employeeId}
+                </TableCell>
 
                 <TableCell>
                   <div className="max-w-[240px] truncate">{u.email}</div>
@@ -66,14 +89,13 @@ export default function EmployeesTable({
 
                 <TableCell>
                   <span className="inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium">
-                    {u.department || "—"}
+                    {u.department || "â€”"}
                   </span>
                 </TableCell>
 
-                {/* ✅ Role now read-only */}
                 <TableCell>
-                  <span className="inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium capitalize">
-                    {u.role || "—"}
+                  <span className="inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium">
+                    {formatRoles(u.roles ?? u.role)}
                   </span>
                 </TableCell>
 
@@ -136,15 +158,19 @@ export default function EmployeesTable({
         </Table>
       </div>
 
-      {/* Confirm Delete */}
-      <AlertDialog open={!!toDelete} onOpenChange={(open) => !open && setToDelete(null)}>
+      <AlertDialog
+        open={!!toDelete}
+        onOpenChange={(open) => {
+          if (!open) setToDelete(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete employee?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action can’t be undone. It will permanently remove{" "}
-              <span className="font-medium">{toDelete?.fullName}</span> from your
-              workspace.
+              This action canâ€™t be undone. It will permanently remove{" "}
+              <span className="font-medium">{toDelete?.fullName}</span> from
+              your workspace.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -187,3 +213,4 @@ function StatusChip({ kind = "neutral", label, icon: Icon }) {
     </span>
   );
 }
+

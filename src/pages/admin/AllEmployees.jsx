@@ -1,4 +1,4 @@
-﻿// src/pages/AllEmployees.jsx
+﻿﻿// src/pages/AllEmployees.jsx
 import React from "react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
@@ -356,5 +356,3 @@ export default function AllEmployees() {
     </div>
   );
 }
-
-

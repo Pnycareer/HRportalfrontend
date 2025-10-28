@@ -4,8 +4,9 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
 function routeForRole(role) {
-  if (role === "employee") return "/employee";
-  if (role === "admin" || role === "superadmin" || role === "hr")
+  const value = String(role || "").toLowerCase();
+  if (value === "employee") return "/employee";
+  if (value === "admin" || value === "superadmin" || value === "hr")
     return "/admin";
   return "/";
 }
@@ -21,8 +22,10 @@ const PrivateRoute = ({ allowedRoles = [] }) => {
   }
 
   // logged in but not allowed -> send to their area
-  if (allowedRoles.length && !allowedRoles.includes(user.role)) {
-    return <Navigate to={routeForRole(user.role)} replace />;
+  const activeRole = user.activeRole || user.role;
+
+  if (allowedRoles.length && !allowedRoles.includes(activeRole)) {
+    return <Navigate to={routeForRole(activeRole)} replace />;
   }
 
   return <Outlet />;

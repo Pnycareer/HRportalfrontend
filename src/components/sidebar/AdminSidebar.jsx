@@ -99,8 +99,9 @@ export default function Sidebar() {
   const widthClass = collapsed ? "w-16" : "w-72";
   const filteredGroups = useMemo(() => {
     if (!user) return groups;
+    const activeRole = user.activeRole || user.role;
     const allowMonthlyReport =
-      user.role === "superadmin" || user.role === "admin";
+      activeRole === "superadmin" || activeRole === "admin";
     return groups
       .map((group) => ({
         ...group,
