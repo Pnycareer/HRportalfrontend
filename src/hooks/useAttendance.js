@@ -2,6 +2,7 @@
 import React from "react";
 import api from "@/lib/axios";
 import { toast } from "sonner";
+import { isoToHHmmUTC, toMinutes, pad2 } from "@/utils/time";
 
 function todayYMD() {
   const d = new Date();
@@ -15,30 +16,18 @@ function toUtcIsoMidnight(ymd) {
   return new Date(`${ymd}T00:00:00Z`).toISOString();
 }
 
-function isoToHHMM(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d)) return "";
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+function normalizeHHmm(value) {
+  if (!value || typeof value !== "string") return "";
+  const minutes = toMinutes(value);
+  if (minutes === null) return "";
+  const [hoursRaw, minutesRaw] = value.split(":").map(Number);
+  return `${pad2(hoursRaw)}:${pad2(minutesRaw)}`;
 }
 
-function ymdAndTimeToIso(ymd, hhmm) {
-  if (!hhmm) return null;
-  const [year, month, day] = ymd.split("-").map(Number);
-  const [hour, minute] = hhmm.split(":").map(Number);
-  if (
-    [year, month, day, hour, minute].some(
-      (n) => !Number.isFinite(n) || Number.isNaN(n)
-    )
-  ) {
-    return null;
-  }
-  const local = new Date();
-  local.setFullYear(year, month - 1, day);
-  local.setHours(hour, minute, 0, 0);
-  return local.toISOString();
+function fromApiHHmm(iso) {
+  if (!iso) return "";
+  const formatted = isoToHHmmUTC(iso);
+  return normalizeHHmm(formatted);
 }
 
 // Flexible OFF detection: treat anything with "off" plus absent/leave as OFF
@@ -79,14 +68,14 @@ export default function useAttendance() {
         for (const r of data?.records || []) {
           const workedMinutes =
             r.workedMinutes ?? (r.workedHours != null ? Math.round(r.workedHours * 60) : null);
+          const checkIn = fromApiHHmm(r.checkIn);
+          const checkOut = fromApiHHmm(r.checkOut);
 
           map[r.userId] = {
             status: r.status,
             note: r.note || "",
-            checkIn: isoToHHMM(r.checkIn),
-            checkOut: isoToHHMM(r.checkOut),
-            checkInSnapshotUrl: r.checkInSnapshotUrl || null,
-            checkOutSnapshotUrl: r.checkOutSnapshotUrl || null,
+            checkIn,
+            checkOut,
             workedMinutes,
           };
         }
@@ -104,9 +93,16 @@ export default function useAttendance() {
   }, [date]);
 
   function setRowChange(userId, patch) {
-    setChanges(prev => ({
+    const nextPatch = { ...(patch || {}) };
+    if (Object.prototype.hasOwnProperty.call(nextPatch, "checkIn")) {
+      nextPatch.checkIn = normalizeHHmm(nextPatch.checkIn);
+    }
+    if (Object.prototype.hasOwnProperty.call(nextPatch, "checkOut")) {
+      nextPatch.checkOut = normalizeHHmm(nextPatch.checkOut);
+    }
+    setChanges((prev) => ({
       ...prev,
-      [userId]: { ...(prev[userId] || {}), ...patch },
+      [userId]: { ...(prev[userId] || {}), ...nextPatch },
     }));
   }
 
@@ -180,19 +176,19 @@ async function markOne(userId) {
   const hasDraftCI = Object.prototype.hasOwnProperty.call(draft, "checkIn");
   const hasDraftCO = Object.prototype.hasOwnProperty.call(draft, "checkOut");
 
-  const baseCI = current.checkIn || "";
-  const baseCO = current.checkOut || "";
+  const baseCI = normalizeHHmm(current.checkIn || "");
+  const baseCO = normalizeHHmm(current.checkOut || "");
 
-  const ciHHMM = hasDraftCI ? (draft.checkIn || "") : baseCI;
-  const coHHMM = hasDraftCO ? (draft.checkOut || "") : baseCO;
+  const ciHHMM = hasDraftCI ? normalizeHHmm(draft.checkIn) : baseCI;
+  const coHHMM = hasDraftCO ? normalizeHHmm(draft.checkOut) : baseCO;
 
   const isOff = (s => {
     const x = String(s || "").toLowerCase();
     return x.includes("off") || x === "absent" || x === "leave";
   })(merged.status);
 
-  const ciIso = isOff ? null : (ciHHMM ? ymdAndTimeToIso(date, ciHHMM) : null);
-  const coIso = isOff ? null : (coHHMM ? ymdAndTimeToIso(date, coHHMM) : null);
+  const ciForApi = isOff ? null : (ciHHMM || null);
+  const coForApi = isOff ? null : (coHHMM || null);
 
   setSaving(true);
   try {
@@ -201,8 +197,8 @@ async function markOne(userId) {
       date: isoDate,
       status: merged.status,
       note: merged.note || "",
-      checkIn: ciIso,
-      checkOut: coIso,
+      checkIn: ciForApi,
+      checkOut: coForApi,
     });
 
     const nextStatus = data?.status ?? merged.status;
@@ -211,22 +207,20 @@ async function markOne(userId) {
       return x.includes("off") || x === "absent" || x === "leave";
     })(nextStatus);
 
-    const nextCheckInIso  = nextIsOff ? null : (data?.checkIn  ?? ciIso);
-    const nextCheckOutIso = nextIsOff ? null : (data?.checkOut ?? coIso);
+    const nextCheckInStr = nextIsOff
+      ? ""
+      : (data?.checkIn ? fromApiHHmm(data.checkIn) : (ciHHMM || ""));
+    const nextCheckOutStr = nextIsOff
+      ? ""
+      : (data?.checkOut ? fromApiHHmm(data.checkOut) : (coHHMM || ""));
 
     setPersisted(prev => ({
       ...prev,
       [userId]: {
         status: nextStatus,
         note: data?.note ?? (merged.note || ""),
-        checkIn: nextCheckInIso ? isoToHHMM(nextCheckInIso) : "",
-        checkOut: nextCheckOutIso ? isoToHHMM(nextCheckOutIso) : "",
-        checkInSnapshotUrl: nextIsOff
-          ? null
-          : (data?.checkInSnapshotUrl ?? prev[userId]?.checkInSnapshotUrl ?? null),
-        checkOutSnapshotUrl: nextIsOff
-          ? null
-          : (data?.checkOutSnapshotUrl ?? prev[userId]?.checkOutSnapshotUrl ?? null),
+        checkIn: nextCheckInStr,
+        checkOut: nextCheckOutStr,
         workedMinutes:
           data?.workedMinutes != null
             ? data.workedMinutes
@@ -249,16 +243,17 @@ async function markOne(userId) {
     const records = Object.entries(changes)
       .map(([userId, v]) => {
         const merged = { ...(persisted[userId] || {}), ...(v || {}) };
+        if (!merged?.status) return null;
         const off = OFF.has(merged.status);
-        return merged?.status
-          ? {
-              userId,
-              status: merged.status,
-              note: merged.note || "",
-              checkIn: off ? null : ymdAndTimeToIso(date, merged.checkIn || ""),
-              checkOut: off ? null : ymdAndTimeToIso(date, merged.checkOut || ""),
-            }
-          : null;
+        const normalizedIn = normalizeHHmm(merged.checkIn || "");
+        const normalizedOut = normalizeHHmm(merged.checkOut || "");
+        return {
+          userId,
+          status: merged.status,
+          note: merged.note || "",
+          checkIn: off ? null : normalizedIn || null,
+          checkOut: off ? null : normalizedOut || null,
+        };
       })
       .filter(Boolean);
 
@@ -278,14 +273,14 @@ async function markOne(userId) {
         for (const r of rd.data?.records || []) {
           const workedMinutes =
             r.workedMinutes ?? (r.workedHours != null ? Math.round(r.workedHours * 60) : null);
+          const checkIn = fromApiHHmm(r.checkIn);
+          const checkOut = fromApiHHmm(r.checkOut);
 
           map[r.userId] = {
             status: r.status,
             note: r.note || "",
-            checkIn: isoToHHMM(r.checkIn),
-            checkOut: isoToHHMM(r.checkOut),
-            checkInSnapshotUrl: r.checkInSnapshotUrl || null,
-            checkOutSnapshotUrl: r.checkOutSnapshotUrl || null,
+            checkIn,
+            checkOut,
             workedMinutes,
           };
         }

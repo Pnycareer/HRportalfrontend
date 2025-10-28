@@ -27,7 +27,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { STATUSES, LABELS } from "@/components/constants/attendance";
-import { Eye } from "lucide-react";
 
 import DutyRosterModal from "@/components/models/DutyRosterModal";
 import OffDaysModal from "@/components/models/OffDaysModal";
@@ -96,7 +95,7 @@ export default function AttendanceTable({
   }
 
   /* ===== shared modals (duty & off days) ===== */
-const [dutyState, setDutyState] = React.useState({
+  const [dutyState, setDutyState] = React.useState({
     open: false,
     id: null,
     name: "",
@@ -108,46 +107,6 @@ const [dutyState, setDutyState] = React.useState({
     name: "",
     days: [],
   });
-
-const [snapshotModal, setSnapshotModal] = React.useState({
-    open: false,
-    url: null,
-    title: "",
-  });
-
-  const apiBase = import.meta.env.VITE_API_BASE || "";
-
-  const resolveSnapshotUrl = React.useCallback(
-    (url) => {
-      if (!url) return null;
-      return url.startsWith("http") ? url : `${apiBase}${url}`;
-    },
-    [apiBase]
-  );
-
-  const openSnapshot = React.useCallback(
-    (userName, url, type) => {
-      const resolved = resolveSnapshotUrl(url);
-      if (!resolved) {
-        toast.error("No snapshot available");
-        return;
-      }
-      setSnapshotModal({
-        open: true,
-        url: resolved,
-        title: `${type} snapshot — ${userName}`,
-      });
-    },
-    [resolveSnapshotUrl]
-  );
-
-  const closeSnapshot = React.useCallback(() => {
-    setSnapshotModal({
-      open: false,
-      url: null,
-      title: "",
-    });
-  }, []);
 
   function openDuty(u, merged) {
     setDutyState({
@@ -351,9 +310,6 @@ const [snapshotModal, setSnapshotModal] = React.useState({
               <TableHead className="w-[120px] uppercase tracking-wide text-xs text-muted-foreground">
                 Check-out
               </TableHead>
-              <TableHead className="w-[150px] uppercase tracking-wide text-xs text-muted-foreground">
-                Snapshots
-              </TableHead>
               <TableHead className="w-[120px] uppercase tracking-wide text-xs text-muted-foreground">
                 Total
               </TableHead>
@@ -495,46 +451,6 @@ const [snapshotModal, setSnapshotModal] = React.useState({
                       }
                     />
                   </TableCell>
-
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 px-2 py-1 text-xs"
-                        disabled={!saved.checkInSnapshotUrl}
-                        onClick={() =>
-                          openSnapshot(
-                            u.fullName || "Employee",
-                            saved.checkInSnapshotUrl,
-                            "Check-in"
-                          )
-                        }
-                      >
-                        <Eye className="mr-1 h-3.5 w-3.5" />
-                        In
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 px-2 py-1 text-xs"
-                        disabled={!saved.checkOutSnapshotUrl}
-                        onClick={() =>
-                          openSnapshot(
-                            u.fullName || "Employee",
-                            saved.checkOutSnapshotUrl,
-                            "Check-out"
-                          )
-                        }
-                      >
-                        <Eye className="mr-1 h-3.5 w-3.5" />
-                        Out
-                      </Button>
-                    </div>
-                  </TableCell>
-
                   <TableCell>
                     <div
                       className={`inline-flex min-w-[80px] items-center justify-center rounded-md border px-2 py-1 text-xs font-medium ${
@@ -599,42 +515,7 @@ const [snapshotModal, setSnapshotModal] = React.useState({
           </TableBody>
         </Table>
       </div>
-
-      <Dialog open={snapshotModal.open} onOpenChange={(open) => (open ? null : closeSnapshot())}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>{snapshotModal.title || "Snapshot"}</DialogTitle>
-          </DialogHeader>
-          {snapshotModal.url ? (
-            <div className="space-y-3">
-              <img
-                src={snapshotModal.url}
-                alt={snapshotModal.title || "Attendance snapshot"}
-                className="w-full rounded-xl border border-white/10 object-cover"
-              />
-              <a
-                href={snapshotModal.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-primary underline underline-offset-2"
-              >
-                Open full size
-              </a>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-white/20 p-6 text-center text-sm text-muted-foreground">
-              Snapshot not available.
-            </div>
-          )}
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={closeSnapshot}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Note Modal */}
+{/* Note Modal */}
       <Dialog
         open={noteModal.open}
         onOpenChange={(o) => (o ? null : closeNoteModal())}
