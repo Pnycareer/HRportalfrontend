@@ -1,34 +1,33 @@
-// src/routes/adminRoutes.jsx
-import AdminLayout from "@/layouts/AdminLayout";
+import React, { lazy, Suspense } from "react";
 import PrivateRoute from "./PrivateRoute";
-import { paths } from "../constants/paths";
-import AllEmployees from "@/pages/admin/AllEmployees";
-import MarkAttendance from "@/pages/admin/MarkAttendance";
-import EmployeeLayout from "@/layouts/EmployeeLayout";
-import MyAttendance from "@/pages/employee/MyAttendance";
-import LeaveRequests from "@/pages/employee/LeaveRequests";
-import TeamLeadApprovals from "@/pages/employee/TeamLeadApprovals";
-import LeaveReports from "@/pages/employee/LeaveReports";
-import UserMonthlyReport from "@/pages/reports/UserMonthlyReport";
-import ProfileCard from "@/pages/employee/ProfileCard";
-import InstructorOvertime from "@/pages/employee/InstructorOvertime";
-import FuelRequistion from "@/pages/Fuel/FuelRequistion";
+
+const EmployeeLayout = lazy(() => import("@/layouts/EmployeeLayout"));
+const MyAttendance = lazy(() => import("@/pages/employee/MyAttendance"));
+const LeaveRequests = lazy(() => import("@/pages/employee/LeaveRequests"));
+const TeamLeadApprovals = lazy(() => import("@/pages/employee/TeamLeadApprovals"));
+const LeaveReports = lazy(() => import("@/pages/employee/LeaveReports"));
+const UserMonthlyReport = lazy(() => import("@/pages/reports/UserMonthlyReport"));
+const ProfileCard = lazy(() => import("@/pages/employee/ProfileCard"));
+const InstructorOvertime = lazy(() => import("@/pages/employee/InstructorOvertime"));
+const FuelRequistion = lazy(() => import("@/pages/Fuel/FuelRequistion"));
+
+const wrap = (el) => <Suspense fallback={null}>{el}</Suspense>;
 
 const employeeRoutes = [
   {
     element: <PrivateRoute allowedRoles={["employee", "superadmin"]} />,
     children: [
       {
-        element: <EmployeeLayout />,
+        element: wrap(<EmployeeLayout />),
         children: [
-          { index: true, element: <MyAttendance /> },
-          { path: "leaves", element: <LeaveRequests /> },
-          { path: "team-lead/review", element: <TeamLeadApprovals /> },
-          { path: "leave-report", element: <LeaveReports /> },
-          { path: "user-monthly", element: <UserMonthlyReport /> },
-          { path: "employee-card", element: <ProfileCard /> },
-          { path: "instructor-overtime", element: <InstructorOvertime /> },
-          { path: "fuel-requisition", element: <FuelRequistion /> },
+          { index: true, element: wrap(<MyAttendance />) },
+          { path: "leaves", element: wrap(<LeaveRequests />) },
+          { path: "team-lead/review", element: wrap(<TeamLeadApprovals />) },
+          { path: "leave-report", element: wrap(<LeaveReports />) },
+          { path: "user-monthly", element: wrap(<UserMonthlyReport />) },
+          { path: "employee-card", element: wrap(<ProfileCard />) },
+          { path: "instructor-overtime", element: wrap(<InstructorOvertime />) },
+          { path: "fuel-requisition", element: wrap(<FuelRequistion />) },
         ],
       },
     ],

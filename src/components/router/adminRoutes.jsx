@@ -1,33 +1,35 @@
-// src/routes/adminRoutes.jsx
-import AdminLayout from "@/layouts/AdminLayout";
+import React, { lazy, Suspense } from "react";
 import PrivateRoute from "./PrivateRoute";
 import { paths } from "../constants/paths";
-import AllEmployees from "@/pages/admin/AllEmployees";
-import MarkAttendance from "@/pages/admin/MarkAttendance";
-import MonthlyBranchReport from "@/pages/reports/MonthlyBranchReport";
-import MonthlyOvertimeReport from "@/pages/reports/MonthlyOvertimeReport";
-import LeaveApprovals from "@/pages/admin/LeaveApprovals";
-import LeaveReports from "@/pages/admin/LeaveReports";
-import InstructorOvertime from "@/pages/admin/InstructorOvertime";
-import FuelRequisitionReport from "@/pages/admin/FuelRequisitionReport";
+
+const AdminLayout = lazy(() => import("@/layouts/AdminLayout"));
+const AllEmployees = lazy(() => import("@/pages/admin/AllEmployees"));
+const MarkAttendance = lazy(() => import("@/pages/admin/MarkAttendance"));
+const MonthlyBranchReport = lazy(() => import("@/pages/reports/MonthlyBranchReport"));
+const MonthlyOvertimeReport = lazy(() => import("@/pages/reports/MonthlyOvertimeReport"));
+const LeaveApprovals = lazy(() => import("@/pages/admin/LeaveApprovals"));
+const LeaveReports = lazy(() => import("@/pages/admin/LeaveReports"));
+const InstructorOvertime = lazy(() => import("@/pages/admin/InstructorOvertime"));
+const FuelRequisitionReport = lazy(() => import("@/pages/admin/FuelRequisitionReport"));
+
+const wrap = (el) => <Suspense fallback={null}>{el}</Suspense>;
 
 const adminRoutes = [
   {
-    // admin-only gate
     element: <PrivateRoute allowedRoles={["superadmin", "hr"]} />,
     children: [
       {
-        element: <AdminLayout />,
+        element: wrap(<AdminLayout />),
         children: [
           { index: true, element: <h1>ADMIN</h1> },
-          { path: paths.USERS, element: <AllEmployees /> },
-          { path: paths.MARK_ATTENDANCE, element: <MarkAttendance /> },
-          { path: paths.LEAVE_REQUESTS, element: <LeaveApprovals /> },
-          { path: "leave-report", element: <LeaveReports /> },
-          { path: "monthly-report", element: <MonthlyBranchReport /> },
-          { path: paths.MONTHLY_OVERTIME_REPORT,element: <MonthlyOvertimeReport />},
-          { path: paths.INSTRUCTOR_OVERTIME, element: <InstructorOvertime /> },
-          { path: "fuel-requisition-report", element: <FuelRequisitionReport/> },
+          { path: paths.USERS, element: wrap(<AllEmployees />) },
+          { path: paths.MARK_ATTENDANCE, element: wrap(<MarkAttendance />) },
+          { path: paths.LEAVE_REQUESTS, element: wrap(<LeaveApprovals />) },
+          { path: "leave-report", element: wrap(<LeaveReports />) },
+          { path: "monthly-report", element: wrap(<MonthlyBranchReport />) },
+          { path: paths.MONTHLY_OVERTIME_REPORT, element: wrap(<MonthlyOvertimeReport />) },
+          { path: paths.INSTRUCTOR_OVERTIME, element: wrap(<InstructorOvertime />) },
+          { path: "fuel-requisition-report", element: wrap(<FuelRequisitionReport />) },
         ],
       },
     ],
