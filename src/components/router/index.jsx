@@ -4,31 +4,25 @@ import { paths } from "../constants/paths";
 import authRoutes from "./authRoutes";
 import adminRoutes from "./adminRoutes";
 import employeeRoutes from "./employeeRoutes";
+import Spinner from "../Spinner/Spinner";
 
 const App = lazy(() => import("../../App"));
-
-const withSuspense = (node) => (
-  <Suspense fallback={<div className="p-6">Loading…</div>}>{node}</Suspense>
-);
 
 const router = createBrowserRouter([
   {
     path: paths.HOME,
-    element: withSuspense(<App />),
+    element: (
+      <Suspense fallback={<Spinner label="Loading page…" />}>
+        <App />
+      </Suspense>
+    ),
     children: [...authRoutes],
   },
-  {
-    path: "/admin",
-    children: [...adminRoutes],
-  },
-  {
-    path: "/employee",
-    children: [...employeeRoutes],
-  },
-  {
-    path: "/access-denied",
-    element: <h1>Access Denied</h1>,
-  },
+
+
+  { path: "/admin", children: [...adminRoutes] },
+  { path: "/employee", children: [...employeeRoutes] },
+  { path: "/access-denied", element: <h1>Access Denied</h1> },
 ]);
 
 export default router;

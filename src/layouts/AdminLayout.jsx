@@ -1,5 +1,6 @@
+// layouts/AdminLayout.jsx
 import React from "react";
-import { Outlet, NavLink } from "react-router-dom";
+import { Outlet, NavLink, useLocation } from "react-router-dom";
 import {
   Sheet, SheetTrigger, SheetContent,
 } from "@/components/ui/sheet";
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Bell, Menu } from "lucide-react";
 import Sidebar from "@/components/sidebar/AdminSidebar";
+import LoaderOverlay from "@/components/LoaderOverlay/LoaderOverlay"; // <— add this
 
 const STORAGE_KEY = "adminSidebarCollapsed";
 
@@ -31,6 +33,21 @@ export default function AdminLayout() {
     window.addEventListener("admin:sidebar-collapsed", handler);
     return () => window.removeEventListener("admin:sidebar-collapsed", handler);
   }, []);
+
+  // ——— route-change overlay (quick feedback even if the chunk is cached) ———
+  const location = useLocation();
+  const [routeChanging, setRouteChanging] = React.useState(false);
+  const routeKeyRef = React.useRef(location.pathname);
+
+  React.useEffect(() => {
+    if (routeKeyRef.current !== location.pathname) {
+      routeKeyRef.current = location.pathname;
+      setRouteChanging(true);
+      // keep the overlay briefly to avoid flicker
+      const t = setTimeout(() => setRouteChanging(false), 250);
+      return () => clearTimeout(t);
+    }
+  }, [location.pathname]);
 
   // desktop left padding to avoid overlap with fixed sidebar
   const desktopPaddingClass = collapsed ? "md:pl-16" : "md:pl-72";
@@ -69,9 +86,15 @@ export default function AdminLayout() {
       {/* content */}
       <div className={desktopPaddingClass}>
         <main className="p-2">
-          <Outlet />
+          {/* Suspense shows loader while lazy chunks download */}
+          <React.Suspense fallback={<LoaderOverlay show={true} />}>
+            <Outlet />
+          </React.Suspense>
         </main>
       </div>
+
+      {/* quick route-change overlay (covers “already-cached” instant navigations) */}
+      <LoaderOverlay show={routeChanging} />
     </div>
   );
 }

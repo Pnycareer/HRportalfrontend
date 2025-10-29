@@ -1,33 +1,31 @@
-import React, { lazy, Suspense } from "react";
+import React from "react";
 import PrivateRoute from "./PrivateRoute";
 
-const EmployeeLayout = lazy(() => import("@/layouts/EmployeeLayout"));
-const MyAttendance = lazy(() => import("@/pages/employee/MyAttendance"));
-const LeaveRequests = lazy(() => import("@/pages/employee/LeaveRequests"));
-const TeamLeadApprovals = lazy(() => import("@/pages/employee/TeamLeadApprovals"));
-const LeaveReports = lazy(() => import("@/pages/employee/LeaveReports"));
-const UserMonthlyReport = lazy(() => import("@/pages/reports/UserMonthlyReport"));
-const ProfileCard = lazy(() => import("@/pages/employee/ProfileCard"));
-const InstructorOvertime = lazy(() => import("@/pages/employee/InstructorOvertime"));
-const FuelRequistion = lazy(() => import("@/pages/Fuel/FuelRequistion"));
+import EmployeeLayout from "@/layouts/EmployeeLayout"; // EAGER
 
-const wrap = (el) => <Suspense fallback={null}>{el}</Suspense>;
+const MyAttendance = React.lazy(() => import("@/pages/employee/MyAttendance"));
+const LeaveRequests = React.lazy(() => import("@/pages/employee/LeaveRequests"));
+const TeamLeadApprovals = React.lazy(() => import("@/pages/employee/TeamLeadApprovals"));
+const LeaveReports = React.lazy(() => import("@/pages/employee/LeaveReports"));
+const UserMonthlyReport = React.lazy(() => import("@/pages/reports/UserMonthlyReport"));
+const ProfileCard = React.lazy(() => import("@/pages/employee/ProfileCard"));
+const InstructorOvertime = React.lazy(() => import("@/pages/employee/InstructorOvertime"));
+const FuelRequistion = React.lazy(() => import("@/pages/Fuel/FuelRequistion"));
 
 const employeeRoutes = [
   {
     element: <PrivateRoute allowedRoles={["employee", "superadmin"]} />,
     children: [
       {
-        element: wrap(<EmployeeLayout />),
+        element: <EmployeeLayout />, // not lazy, removes the waterfall
         children: [
-          { index: true, element: wrap(<MyAttendance />) },
-          { path: "leaves", element: wrap(<LeaveRequests />) },
-          { path: "team-lead/review", element: wrap(<TeamLeadApprovals />) },
-          { path: "leave-report", element: wrap(<LeaveReports />) },
-          { path: "user-monthly", element: wrap(<UserMonthlyReport />) },
-          { path: "employee-card", element: wrap(<ProfileCard />) },
-          { path: "instructor-overtime", element: wrap(<InstructorOvertime />) },
-          { path: "fuel-requisition", element: wrap(<FuelRequistion />) },
+          { index: true, element: <MyAttendance /> },
+          { path: "leaves", element: <LeaveRequests /> },
+          { path: "team-lead/review", element: <TeamLeadApprovals /> },
+          { path: "leave-report", element: <LeaveReports /> },
+          { path: "employee-card", element: <ProfileCard /> },
+          { path: "instructor-overtime", element: <InstructorOvertime /> },
+          { path: "fuel-requisition", element: <FuelRequistion /> },
         ],
       },
     ],
