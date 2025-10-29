@@ -16,6 +16,7 @@ import {
   LogOut,
   NotebookPen,
   ChevronLeft,
+  PersonStandingIcon,
   ChevronRight,
 } from "lucide-react";
 
@@ -52,6 +53,11 @@ const groups = [
         to: "/admin/monthly-report",
         icon: BarChart3,
         label: "Monthly Report",
+      },
+      {
+        to: "/admin/user-monthly",
+        icon: PersonStandingIcon,
+        label: "Individual Report",
       },
       {
         to: "/admin/monthly-overtime-report",

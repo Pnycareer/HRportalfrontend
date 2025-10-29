@@ -1,78 +1,55 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import useEmployees from "@/hooks/useEmployees";
 import { useLeaveReports } from "@/hooks/useLeaveReports";
-import { MonthlyLeaveReport, YearlyLeaveReport } from "@/components/leaves/LeaveReportSheets";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 
-const months = [
-  { value: "1", label: "January" },
-  { value: "2", label: "February" },
-  { value: "3", label: "March" },
-  { value: "4", label: "April" },
-  { value: "5", label: "May" },
-  { value: "6", label: "June" },
-  { value: "7", label: "July" },
-  { value: "8", label: "August" },
-  { value: "9", label: "September" },
-  { value: "10", label: "October" },
-  { value: "11", label: "November" },
-  { value: "12", label: "December" },
-];
+import ReportFilters from "@/components/leaves/admin-leave-reports/ReportFilters";
+import PeriodBar from "@/components/leaves/admin-leave-reports/PeriodBar";
+import AllowanceOverride from "@/components/leaves/admin-leave-reports/AllowanceOverride";
+import ReportViewer from "@/components/leaves/admin-leave-reports/ReportViewer";
+import { months } from "@/components/constants/leavereport";
 
 export default function AdminLeaveReports() {
+  // ——— data hooks ———
   const {
     filtered: employees,
     loading: loadingEmployees,
-    branch,
-    setBranch,
-    branches,
-    dept,
-    setDept,
-    departments,
-    q,
-    setQ,
+    branch, setBranch, branches,
+    dept, setDept, departments,
+    q, setQ,
   } = useEmployees();
+
   const {
-    monthly,
-    yearly,
-    loading,
-    savingAllowance,
-    fetchMonthly,
-    fetchYearly,
-    updateAllowance,
-    setMonthly,
-    setYearly,
+    monthly, yearly, loading,
+    savingAllowance, fetchMonthly, fetchYearly,
+    updateAllowance, setMonthly, setYearly,
   } = useLeaveReports();
 
+  // ——— local state ———
   const now = React.useMemo(() => new Date(), []);
   const [year, setYear] = React.useState(String(now.getUTCFullYear()));
   const [month, setMonth] = React.useState(String(now.getUTCMonth() + 1));
   const [activeTab, setActiveTab] = React.useState("monthly");
   const [selectedUserId, setSelectedUserId] = React.useState(null);
   const reportRef = React.useRef(null);
+
   const [allowanceDraft, setAllowanceDraft] = React.useState({
     allowed: "",
     remaining: "",
   });
   const [allowanceDirty, setAllowanceDirty] = React.useState(false);
 
+  // auto-select first employee
   React.useEffect(() => {
     if (!loadingEmployees && employees.length > 0 && !selectedUserId) {
       setSelectedUserId(employees[0]?._id || null);
     }
   }, [employees, loadingEmployees, selectedUserId]);
 
+  // fetch data
   const loadReports = React.useCallback(async () => {
     if (!selectedUserId) return;
     const payload = { userId: selectedUserId, year, month };
@@ -86,6 +63,7 @@ export default function AdminLeaveReports() {
     loadReports().catch(() => {});
   }, [loadReports]);
 
+  // keep allowance draft in sync
   React.useEffect(() => {
     if (monthly?.allowance) {
       setAllowanceDraft({
@@ -105,6 +83,7 @@ export default function AdminLeaveReports() {
     }
   }, [monthly?.allowance?.allowed, monthly?.allowance?.remaining]);
 
+  // download as PDF
   const handleDownload = async () => {
     if (!reportRef.current) return;
     const canvas = await html2canvas(reportRef.current, {
@@ -117,37 +96,16 @@ export default function AdminLeaveReports() {
     const width = pdf.internal.pageSize.getWidth();
     const height = (canvas.height * width) / canvas.width;
     pdf.addImage(imageData, "PNG", 0, 0, width, height);
+
+    const monthLabel = (months.find((m) => m.value === String(month)) || {}).label || month;
     pdf.save(
       `${selectedUserId || "employee"}-${
-        activeTab === "monthly" ? `${month}-${year}` : year
+        activeTab === "monthly" ? `${monthLabel}-${year}` : year
       }-leave-report.pdf`
     );
   };
 
-  const handleAllowanceChange = (field) => (event) => {
-    const value = event.target.value;
-    setAllowanceDraft((prev) => ({ ...prev, [field]: value }));
-    setAllowanceDirty(true);
-  };
-
-  const handleResetAllowance = () => {
-    if (monthly?.allowance) {
-      setAllowanceDraft({
-        allowed:
-          monthly.allowance.allowed !== undefined
-            ? String(monthly.allowance.allowed)
-            : "",
-        remaining:
-          monthly.allowance.remaining !== undefined
-            ? String(monthly.allowance.remaining)
-            : "",
-      });
-    } else {
-      setAllowanceDraft({ allowed: "", remaining: "" });
-    }
-    setAllowanceDirty(false);
-  };
-
+  // save allowance (same logic you had, unchanged)
   const handleSaveAllowance = async () => {
     if (!selectedUserId) return;
     const allowedValue = Number(allowanceDraft.allowed);
@@ -168,15 +126,12 @@ export default function AdminLeaveReports() {
       monthly?.allowance?.actualUsed,
       yearly?.totals?.approved,
       monthly?.allowance?.used,
-    ].filter((value) => Number.isFinite(value));
-    const actualUsage = usageCandidates.length
-      ? Math.max(...usageCandidates)
-      : 0;
+    ].filter((v) => Number.isFinite(v));
+    const actualUsage = usageCandidates.length ? Math.max(...usageCandidates) : 0;
     const maxRemaining = Math.max(allowedValue - actualUsage, 0);
     const epsilon = 0.0001;
     if (remainingValue - maxRemaining > epsilon) {
-      const formatDays = (value) =>
-        Number.isInteger(value) ? String(value) : value.toFixed(2);
+      const formatDays = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
       const approvedText =
         actualUsage === 1
           ? "1 day has already been approved this year"
@@ -186,6 +141,7 @@ export default function AdminLeaveReports() {
       );
       return;
     }
+
     try {
       const updated = await updateAllowance({
         userId: selectedUserId,
@@ -245,228 +201,77 @@ export default function AdminLeaveReports() {
       });
       setAllowanceDirty(false);
     } catch {
-      // errors handled in hook toast
+      // hook handles toasts
     }
+  };
+
+  const handleResetAllowance = () => {
+    if (monthly?.allowance) {
+      setAllowanceDraft({
+        allowed:
+          monthly.allowance.allowed !== undefined
+            ? String(monthly.allowance.allowed)
+            : "",
+        remaining:
+          monthly.allowance.remaining !== undefined
+            ? String(monthly.allowance.remaining)
+            : "",
+      });
+    } else {
+      setAllowanceDraft({ allowed: "", remaining: "" });
+    }
+    setAllowanceDirty(false);
   };
 
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">
-            Employee Leave Reports
-          </h1>
+          <h1 className="text-2xl font-semibold text-foreground">Employee Leave Reports</h1>
           <p className="text-sm text-muted-foreground">
             Generate monthly or yearly leave summaries for any team member.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="w-48">
-            <LabelInput id="branch" label="Branch">
-              <Select value={branch} onValueChange={setBranch}>
-                <SelectTrigger id="branch">
-                  <SelectValue placeholder="Branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item === "all" ? "All branches" : item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </LabelInput>
-          </div>
-          <div className="w-48">
-            <LabelInput id="dept" label="Department">
-              <Select value={dept} onValueChange={setDept}>
-                <SelectTrigger id="dept">
-                  <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item === "all" ? "All departments" : item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </LabelInput>
-          </div>
-          <div className="w-56">
-            <LabelInput id="search" label="Search">
-              <Input
-                id="search"
-                value={q}
-                onChange={(event) => setQ(event.target.value)}
-                placeholder="Name, email, ID..."
-              />
-            </LabelInput>
-          </div>
-          <div className="w-64">
-            <LabelInput id="employee" label="Employee">
-              <Select
-                value={selectedUserId || undefined}
-                onValueChange={setSelectedUserId}
-              >
-                <SelectTrigger id="employee">
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((emp) => (
-                    <SelectItem key={emp._id} value={emp._id}>
-                      {emp.fullName} ({emp.employeeId})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </LabelInput>
-          </div>
-        </div>
+        <ReportFilters
+          branch={branch} setBranch={setBranch} branches={branches}
+          dept={dept} setDept={setDept} departments={departments}
+          q={q} setQ={setQ}
+          employees={employees}
+          selectedUserId={selectedUserId}
+          setSelectedUserId={setSelectedUserId}
+        />
       </header>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="w-32">
-          <LabelInput id="year" label="Year">
-            <Input
-              id="year"
-              type="number"
-              min="2000"
-              value={year}
-              onChange={(event) => setYear(event.target.value)}
-            />
-          </LabelInput>
-        </div>
-        <div className="w-40">
-          <LabelInput id="month" label="Month">
-            <Select value={month} onValueChange={setMonth}>
-              <SelectTrigger id="month">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {months.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </LabelInput>
-        </div>
-        <Button onClick={loadReports} disabled={loading || loadingEmployees}>
-          {loading ? "Loading..." : "Refresh"}
-        </Button>
-        <div className="flex items-center gap-2">
-          <Button
-            variant={activeTab === "monthly" ? "default" : "outline"}
-            onClick={() => setActiveTab("monthly")}
-          >
-            Monthly report
-          </Button>
-          <Button
-            variant={activeTab === "yearly" ? "default" : "outline"}
-            onClick={() => setActiveTab("yearly")}
-          >
-            Yearly summary
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleDownload}
-            disabled={loading || (!monthly && !yearly)}
-          >
-            Download PDF
-          </Button>
-        </div>
-      </div>
+      <PeriodBar
+        year={year} setYear={setYear}
+        month={month} setMonth={setMonth}
+        activeTab={activeTab} setActiveTab={setActiveTab}
+        loading={loading} loadingEmployees={loadingEmployees}
+        onRefresh={loadReports}
+        onDownload={handleDownload}
+        monthly={monthly} yearly={yearly}
+      />
 
-      <div className="rounded-xl border bg-card p-4">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-lg font-semibold">Allowance override</h2>
-          <p className="text-sm text-muted-foreground">
-            Update annual allowance and remaining balance for the selected employee.
-          </p>
-        </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          <LabelInput id="annual-allowance" label="Annual allowance">
-            <Input
-              id="annual-allowance"
-              type="number"
-              min="0"
-              value={allowanceDraft.allowed}
-              onChange={handleAllowanceChange("allowed")}
-              disabled={savingAllowance || !selectedUserId}
-            />
-          </LabelInput>
-          <LabelInput id="remaining-balance" label="Remaining balance">
-            <Input
-              id="remaining-balance"
-              type="number"
-              min="0"
-              value={allowanceDraft.remaining}
-              onChange={handleAllowanceChange("remaining")}
-              disabled={savingAllowance || !selectedUserId}
-            />
-          </LabelInput>
-          <LabelInput id="approved-days" label="Approved days (auto)">
-            <Input
-              id="approved-days"
-              readOnly
-              value={
-                allowanceDraft.allowed && allowanceDraft.remaining
-                  ? Math.max(
-                      Number(allowanceDraft.allowed || 0) -
-                        Number(allowanceDraft.remaining || 0),
-                      0
-                    )
-                  : monthly?.allowance?.used ?? ""
-              }
-            />
-          </LabelInput>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            onClick={handleSaveAllowance}
-            disabled={
-              savingAllowance ||
-              !selectedUserId ||
-              !allowanceDirty ||
-              allowanceDraft.allowed === "" ||
-              allowanceDraft.remaining === ""
-            }
-          >
-            {savingAllowance ? "Saving..." : "Save allowance"}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleResetAllowance}
-            disabled={savingAllowance || !allowanceDirty}
-          >
-            Reset
-          </Button>
-        </div>
-      </div>
+      <AllowanceOverride
+        monthly={monthly}
+        yearly={yearly}
+        allowanceDraft={allowanceDraft}
+        setAllowanceDraft={setAllowanceDraft}
+        allowanceDirty={allowanceDirty}
+        setAllowanceDirty={setAllowanceDirty}
+        savingAllowance={savingAllowance}
+        selectedUserId={selectedUserId}
+        onSave={handleSaveAllowance}
+        onReset={handleResetAllowance}
+      />
 
-  <div className="rounded-xl border bg-card p-4">
-        {activeTab === "monthly" ? (
-          <MonthlyLeaveReport data={monthly} ref={reportRef} />
-        ) : (
-          <YearlyLeaveReport data={yearly} ref={reportRef} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function LabelInput({ id, label, children }) {
-  return (
-    <div className="space-y-1 text-sm">
-      <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
-        {label}
-      </label>
-      {children}
+      <ReportViewer
+        ref={reportRef}
+        activeTab={activeTab}
+        monthly={monthly}
+        yearly={yearly}
+      />
     </div>
   );
 }
