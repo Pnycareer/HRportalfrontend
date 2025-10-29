@@ -399,12 +399,20 @@ export default function AttendanceTable({
                   <TableCell>
                     <Select
                       value={merged.status || ""}
-                      onValueChange={(val) => onStatusChange?.(u._id, val)}
+                      onValueChange={(val) =>
+                        onStatusChange?.(u._id, val === "__clear__" ? "" : val)
+                      }
                     >
                       <SelectTrigger className="h-8 w-[160px] text-sm">
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent align="start" className="w-[160px] p-1">
+                        <SelectItem
+                          value="__clear__"
+                          className="text-sm h-8 py-1.5 text-muted-foreground"
+                        >
+                          Clear selection
+                        </SelectItem>
                         {STATUSES.map((s) => (
                           <SelectItem
                             key={s}
