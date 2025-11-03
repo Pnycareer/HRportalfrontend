@@ -15,6 +15,7 @@ export const LABELS = {
   late: "Late",
   official_off: "Official Off",
   short_leave: "Short Leave",
+  half_day: "Half Day",
   public_holiday: "public_holiday",
 };
 
@@ -25,6 +26,7 @@ export const ORDER = [
   "late",
   "official_off",
   "short_leave",
+  "half_day",
 ];
 
 // optional: chip colors (Tailwind)
@@ -35,4 +37,5 @@ export const CHIP = {
   late: "border-orange-500/30 text-orange-700",
   official_off: "border-blue-500/30 text-blue-700",
   short_leave: "border-purple-500/30 text-purple-700",
+  half_day: "border-fuchsia-500/30 text-fuchsia-700",
 };

@@ -1,5 +1,5 @@
 // app/(wherever)/MarkAttendance.jsx
-import React from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,42 +10,83 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
 
+import { CITIES, getBranchesForCity } from "@/components/constants/locations";
+
+// helpers (kept for branch merge)
+function dedupeStrings(arr) {
+  return Array.from(new Set((arr || []).filter(Boolean).map(String)));
+}
+function mergeWithAll(apiList = [], customList = []) {
+  const hasAll = apiList.includes("all") || customList.includes("all");
+  const merged = dedupeStrings([...apiList, ...customList].filter(v => v !== "all"));
+  return hasAll ? ["all", ...merged] : merged;
+}
+
 export default function MarkAttendance() {
   const { user } = useAuth();
 
-  const {
-    filtered,
-    loading: usersLoading,
-    q, setQ,
-    branch, setBranch, branches,
-    dept, setDept, departments,
-    reload,
-    updateEmployee,
-    updateEmployeeSalary,
-  } = useEmployees();
+  // guard against hook returning undefined/null during init
+  const employeesState = useEmployees() || {};
 
   const {
-    date,
-    setDate,
-    changes,
-    setRowChange,
-    resetRow, // not used here but exported if you want a "Reset" button later
-    markOne,
-    saveAll,
-    saving,
-    persisted,
-    loading: attendanceLoading,
-  } = useAttendance();
+    filtered = [],
+    loading: usersLoading = false,
+    q = "",
+    setQ = () => {},
+    branch = "",
+    setBranch = () => {},
+    branches = [],
+    reload = () => {},
+    updateEmployee = () => {},
+    updateEmployeeSalary = () => {},
+  } = employeesState;
+
+  const {
+    date = "",
+    setDate = () => {},
+    changes = {},
+    setRowChange = () => {},
+    resetRow = () => {}, // not used
+    markOne = async () => {},
+    saveAll = async () => {},
+    saving = false,
+    persisted = {},
+    loading: attendanceLoading = false,
+  } = useAttendance() || {};
 
   const loading = usersLoading || attendanceLoading;
 
-  // ✅ Don’t auto-mark status here — only set the times; status stays explicit
-  const handleCheckInChange = React.useCallback(
-    (id, hhmm) => {
-      setRowChange(id, { checkIn: hhmm });
-    },
-    [setRowChange]
+  // ✅ City/Branch default to "all"
+  const [city, setCity] = useState("all");
+
+  // City options include "all" at the top
+  const cityOptions = useMemo(() => ["all", ...CITIES], []); // CITIES is static
+
+  // All branches across all cities for the "all" option
+  const allCityBranches = useMemo(
+    () => dedupeStrings([].concat(...CITIES.map((c) => getBranchesForCity(c)))),
+    []
   );
+
+  // Branch options = (city === 'all' ? allCityBranches : by city) ∪ API branches, keep "all"
+  const branchOptions = useMemo(() => {
+    const cityBranches = city === "all" ? allCityBranches : (city ? getBranchesForCity(city) : []);
+    return mergeWithAll(branches, ["all", ...cityBranches]);
+  }, [city, branches, allCityBranches]);
+
+  // If city changes and current branch becomes invalid (not in list, excluding 'all'), set to 'all'
+  useEffect(() => {
+    if (branch && branch !== "all" && !branchOptions.includes(String(branch))) {
+      setBranch("all");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city, branchOptions]);
+
+  // On first mount, if branch is empty, default it to 'all'
+  useEffect(() => {
+    if (!branch) setBranch("all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="p-6 space-y-4">
@@ -74,29 +115,31 @@ export default function MarkAttendance() {
           </Button>
         </div>
 
-        {/* Branch + Department */}
+        {/* City + Branch */}
         <div className="flex items-center gap-2">
-          <Select value={branch} onValueChange={setBranch}>
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Branch" />
+          {/* City (default: All) */}
+          <Select value={city} onValueChange={setCity}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="City" />
             </SelectTrigger>
             <SelectContent>
-              {branches.map((b) => (
-                <SelectItem key={b} value={b}>
-                  {b === "all" ? "All branches" : b}
+              {cityOptions.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c === "all" ? "All Cities" : c}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          <Select value={dept} onValueChange={setDept}>
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Department" />
+          {/* Branch (default: All) */}
+          <Select value={branch} onValueChange={setBranch}>
+            <SelectTrigger className="w-[240px]">
+              <SelectValue placeholder={city && city !== "all" ? `Branch in ${city}` : "Branch"} />
             </SelectTrigger>
             <SelectContent>
-              {departments.map((d) => (
-                <SelectItem key={d} value={d}>
-                  {d === "all" ? "All departments" : d}
+              {branchOptions.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b === "all" ? "All branches" : b}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -131,8 +174,10 @@ export default function MarkAttendance() {
           persisted={persisted}
           changes={changes}
           onStatusChange={(id, status) => setRowChange(id, { status })}
+          onSubStatusChange={(id, subStatus) => setRowChange(id, { subStatus })}
+          onActionChange={(id, action) => setRowChange(id, { action })}
           onNoteChange={(id, note) => setRowChange(id, { note })}
-          onCheckInChange={handleCheckInChange}
+          onCheckInChange={(id, checkIn) => setRowChange(id, { checkIn })}
           onCheckOutChange={(id, checkOut) => setRowChange(id, { checkOut })}
           onMark={async (id) => { try { await markOne(id); } catch {} }}
           dateYmd={date}

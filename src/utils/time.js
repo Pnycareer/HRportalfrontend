@@ -1,33 +1,47 @@
+// utils/time.js
+
+// zero-pad
 export function pad2(n) {
   return String(n).padStart(2, "0");
 }
 
-export function toMinutes(value) {
-  if (!value || typeof value !== "string") return null;
-  const [hourStr, minuteStr] = value.split(":");
-  if (hourStr === undefined || minuteStr === undefined) return null;
-  const hours = Number(hourStr);
-  const minutes = Number(minuteStr);
-  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
-  return hours * 60 + minutes;
+// "h:m" / "HH:mm" -> "HH:mm" or ""
+export function normalizeHHmm(value) {
+  if (!value || typeof value !== "string") return "";
+  const [h, m] = value.split(":").map(Number);
+  if (!Number.isInteger(h) || !Number.isInteger(m)) return "";
+  if (h < 0 || h > 23 || m < 0 || m > 59) return "";
+  return `${pad2(h)}:${pad2(m)}`;
 }
 
-export function minutesToHuman(minutes) {
-  if (!Number.isFinite(minutes) || minutes <= 0) return "0 min";
-  return `${minutes} min`;
+// "HH:mm" -> minutes since midnight (0..1439) or null
+export function hhmmToMinutes(hhmm) {
+  if (!hhmm || typeof hhmm !== "string") return null;
+  const [h, m] = hhmm.split(":").map(Number);
+  if (!Number.isInteger(h) || !Number.isInteger(m)) return null;
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
 }
 
-export function hhmmTo12hLabel(hhmm) {
-  if (!hhmm || typeof hhmm !== "string") return "--";
-  const [hStr, mStr] = hhmm.split(":");
-  const h = Number(hStr);
-  const m = Number(mStr);
-  if (!Number.isInteger(h) || !Number.isInteger(m)) return hhmm;
+// minutes -> "HH:mm" (keeps sign if you pass negatives, but you shouldn't here)
+export function minutesToHHMM(mins) {
+  if (mins == null || Number.isNaN(mins)) return "";
+  const sign = mins < 0 ? "-" : "";
+  const abs = Math.abs(mins);
+  const h = pad2(Math.floor(abs / 60));
+  const m = pad2(abs % 60);
+  return `${sign}${h}:${m}`;
+}
+
+// simple local YYYY-MM-DD
+export function todayYMD() {
   const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
+
+
+
+// checking needed
 
 export function formatClockLabel(value) {
   if (!value) return "--";
@@ -50,6 +64,13 @@ export function formatClockLabel(value) {
   return date.toLocaleTimeString([], isTZAware ? { ...opts, timeZone: "UTC" } : opts);
 }
 
+
+export function minutesToHuman(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) return "0 min";
+  return `${minutes} min`;
+}
+
+
 export function formatDateLabel(value) {
   if (!value) return "--";
   const date = new Date(value);
@@ -60,38 +81,4 @@ export function formatDateLabel(value) {
     day: "numeric",
     year: "numeric",
   });
-}
-
-export function createSlotId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return Math.random().toString(36).slice(2);
-}
-
-export const makeInitialSlot = () => ({ id: createSlotId(), start: "", end: "" });
-
-// ISO -> "YYYY-MM-DD"
-export function isoToDateInput(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
-}
-
-// ISO -> "HH:mm" (stored UTC in backend)
-export function isoToHHmmUTC(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
-}
-
-// Find city by branch (best effort)
-export function guessCityByBranch(branch, cityBranches) {
-  if (!branch) return "";
-  for (const city of Object.keys(cityBranches)) {
-    if ((cityBranches[city] || []).includes(branch)) return city;
-  }
-  return "";
 }

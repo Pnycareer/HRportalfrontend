@@ -17,3 +17,5 @@ export const BRANCHES_BY_CITY = {
 export function getBranchesForCity(city) {
   return BRANCHES_BY_CITY[city] || [];
 }
+
+

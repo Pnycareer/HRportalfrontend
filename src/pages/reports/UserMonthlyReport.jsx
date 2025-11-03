@@ -4,8 +4,21 @@ import useEmployees from "@/hooks/useEmployees";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import UserProfilePdfButton from "@/components/reports/UserProfilePdfButton";
 import { cn } from "@/lib/utils";
 import {
@@ -20,7 +33,7 @@ import {
   Clock,
   MapPin,
   Building2,
-  BadgeInfo
+  BadgeInfo,
 } from "lucide-react";
 
 const MONTHS = [
@@ -35,16 +48,17 @@ const MONTHS = [
   [9, "September"],
   [10, "October"],
   [11, "November"],
-  [12, "December"]
+  [12, "December"],
 ];
 
 const STATUS_PILLS = {
   present: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
   late: "border-amber-500/30 bg-amber-500/10 text-amber-400",
   absent: "border-rose-500/30 bg-rose-500/10 text-rose-400",
-  leave: "border-sky-500/30 bg-sky-500/10 text-sky-400",
+  leave: "border-sky-500/30 via-sky-500/5 to-transparent text-sky-400",
   official_off: "border-indigo-500/30 bg-indigo-500/10 text-indigo-400",
-  short_leave: "border-purple-500/30 bg-purple-500/10 text-purple-400"
+  short_leave: "border-purple-500/30 bg-purple-500/10 text-purple-400",
+  half_day: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-400",
 };
 
 const SUMMARY_CARDS = [
@@ -52,50 +66,56 @@ const SUMMARY_CARDS = [
     key: "daysMarked",
     label: "Days Marked",
     icon: CalendarDays,
-    gradient: "from-primary/30 via-primary/5 to-transparent"
+    gradient: "from-primary/30 via-primary/5 to-transparent",
   },
   {
     key: "present",
     label: "Present",
     icon: CheckCircle2,
-    gradient: "from-emerald-500/30 via-emerald-500/5 to-transparent"
+    gradient: "from-emerald-500/30 via-emerald-500/5 to-transparent",
   },
   {
     key: "late",
     label: "Late",
     icon: AlarmClock,
-    gradient: "from-amber-500/30 via-amber-500/5 to-transparent"
+    gradient: "from-amber-500/30 via-amber-500/5 to-transparent",
   },
   {
     key: "absent",
     label: "Absent",
     icon: XCircle,
-    gradient: "from-rose-500/30 via-rose-500/5 to-transparent"
+    gradient: "from-rose-500/30 via-rose-500/5 to-transparent",
   },
   {
     key: "leave",
     label: "Leave",
     icon: Plane,
-    gradient: "from-sky-500/30 via-sky-500/5 to-transparent"
+    gradient: "from-sky-500/30 via-sky-500/5 to-transparent",
   },
   {
     key: "official_off",
     label: "Official Off",
     icon: Briefcase,
-    gradient: "from-indigo-500/30 via-indigo-500/5 to-transparent"
+    gradient: "from-indigo-500/30 via-indigo-500/5 to-transparent",
   },
   {
     key: "short_leave",
     label: "Short Leave",
     icon: CalendarDays,
-    gradient: "from-purple-500/30 via-purple-500/5 to-transparent"
+    gradient: "from-purple-500/30 via-purple-500/5 to-transparent",
+  },
+  {
+    key: "half_day",
+    label: "Half Day",
+    icon: CalendarDays,
+    gradient: "from-fuchsia-500/30 via-fuchsia-500/5 to-transparent",
   },
   {
     key: "workedHours",
     label: "Worked Hours",
     icon: Clock,
-    gradient: "from-foreground/20 via-foreground/5 to-transparent"
-  }
+    gradient: "from-foreground/20 via-foreground/5 to-transparent",
+  },
 ];
 
 function hhmmOrDash(value) {
@@ -111,8 +131,20 @@ function formatDate(value) {
     year: "numeric",
     month: "short",
     day: "2-digit",
-    weekday: "short"
+    weekday: "short",
   });
+}
+
+function formatTimeTo12Hour(timeStr) {
+  if (!timeStr) return "--";
+  const parts = String(timeStr).split(":").map(Number);
+  if (parts.length < 2) return "--";
+  const [hours, minutes] = parts;
+  if (isNaN(hours) || isNaN(minutes)) return "--";
+
+  const period = hours >= 12 ? "PM" : "AM";
+  const formattedHours = hours % 12 || 12; // 0 -> 12
+  return `${formattedHours}:${minutes.toString().padStart(2, "0")} ${period}`;
 }
 
 function formatStatus(value) {
@@ -124,8 +156,17 @@ function formatStatus(value) {
 }
 
 export default function UserMonthlyReport() {
-  const { year, setYear, month, setMonth, userId, setUserId, loading, data, refetch } =
-    useUserMonthReport();
+  const {
+    year,
+    setYear,
+    month,
+    setMonth,
+    userId,
+    setUserId,
+    loading,
+    data,
+    refetch,
+  } = useUserMonthReport();
   const { filtered: employees, loading: usersLoading } = useEmployees();
 
   const meta = data?.meta;
@@ -137,30 +178,27 @@ export default function UserMonthlyReport() {
     [month]
   );
 
-  const summaryValues = React.useMemo(
-    () => {
-      const totals = summary?.totals ?? {};
-      return SUMMARY_CARDS.map((card) => {
-        if (card.key === "daysMarked") {
-          return {
-            ...card,
-            value: summary?.daysMarked ?? "--"
-          };
-        }
-        if (card.key === "workedHours") {
-          return {
-            ...card,
-            value: (summary?.workedHours ?? 0).toFixed(2)
-          };
-        }
+  const summaryValues = React.useMemo(() => {
+    const totals = summary?.totals ?? {};
+    return SUMMARY_CARDS.map((card) => {
+      if (card.key === "daysMarked") {
         return {
           ...card,
-          value: totals?.[card.key] ?? 0
+          value: summary?.daysMarked ?? "--",
         };
-      });
-    },
-    [summary]
-  );
+      }
+      if (card.key === "workedHours") {
+        return {
+          ...card,
+          value: (summary?.workedHours ?? 0).toFixed(2),
+        };
+      }
+      return {
+        ...card,
+        value: totals?.[card.key] ?? 0,
+      };
+    });
+  }, [summary]);
 
   const trackedDays = React.useMemo(() => {
     const daysMarked = summary?.daysMarked;
@@ -184,20 +222,54 @@ export default function UserMonthlyReport() {
       {
         label: "Employee ID",
         value: meta.user.employeeId || "--",
-        icon: BadgeInfo
+        icon: BadgeInfo,
       },
       {
         label: "Department",
         value: meta.user.department || "--",
-        icon: Building2
+        icon: Building2,
       },
       {
         label: "Branch",
         value: meta.user.branch || "--",
-        icon: MapPin
-      }
+        icon: MapPin,
+      },
     ];
   }, [meta]);
+
+  // --- NEW: Missing check-ins / check-outs
+  const missingStats = React.useMemo(() => {
+    let missingCheckIns = 0;
+    let missingCheckOuts = 0;
+
+    days.forEach((d) => {
+      if (!d.checkIn || d.checkIn.trim() === "") missingCheckIns++;
+      if (!d.checkOut || d.checkOut.trim() === "") missingCheckOuts++;
+    });
+
+    return { missingCheckIns, missingCheckOuts };
+  }, [days]);
+
+  // --- NEW: Combine into cards list so the same map renders everything
+  const combinedCards = React.useMemo(() => {
+    return [
+      ...summaryValues,
+      {
+        key: "missing_checkins",
+        label: "Missing Check-ins",
+        value: missingStats.missingCheckIns,
+        icon: XCircle,
+        gradient: "from-rose-500/30 via-rose-500/5 to-transparent",
+      },
+      {
+        key: "missing_checkouts",
+        label: "Missing Check-outs",
+        value: missingStats.missingCheckOuts,
+        icon: AlarmClock,
+        gradient: "from-amber-500/30 via-amber-500/5 to-transparent",
+      },
+    ];
+  }, [summaryValues, missingStats]);
 
   return (
     <div className="relative space-y-6">
@@ -220,8 +292,9 @@ export default function UserMonthlyReport() {
                   User Monthly Attendance
                 </h1>
                 <p className="text-sm text-muted-foreground sm:max-w-xl">
-                  Monitor employee presence, working hours, and exceptions in one streamlined view.
-                  Adjust users and timelines without leaving the report.
+                  Monitor employee presence, working hours, and exceptions in
+                  one streamlined view. Adjust users and timelines without
+                  leaving the report.
                 </p>
               </div>
             </div>
@@ -239,8 +312,12 @@ export default function UserMonthlyReport() {
                       ) : (
                         <span className="h-3.5 w-3.5 rounded-full border border-primary/40" />
                       )}
-                      <span className="text-muted-foreground">{detail.label}:</span>
-                      <span className="font-medium text-foreground">{detail.value}</span>
+                      <span className="text-muted-foreground">
+                        {detail.label}:
+                      </span>
+                      <span className="font-medium text-foreground">
+                        {detail.value}
+                      </span>
                     </span>
                   );
                 })}
@@ -255,7 +332,9 @@ export default function UserMonthlyReport() {
               </SelectTrigger>
               <SelectContent>
                 {usersLoading ? (
-                  <div className="p-2 text-sm text-muted-foreground">Loading users...</div>
+                  <div className="p-2 text-sm text-muted-foreground">
+                    Loading users...
+                  </div>
                 ) : (
                   employees.map((employee) => (
                     <SelectItem key={employee._id} value={employee._id}>
@@ -266,7 +345,10 @@ export default function UserMonthlyReport() {
               </SelectContent>
             </Select>
 
-            <Select value={String(month)} onValueChange={(value) => setMonth(parseInt(value, 10))}>
+            <Select
+              value={String(month)}
+              onValueChange={(value) => setMonth(parseInt(value, 10))}
+            >
               <SelectTrigger className="h-12 border-white/10 bg-white/5 p-3 text-left backdrop-blur">
                 <SelectValue placeholder="Month" />
               </SelectTrigger>
@@ -282,7 +364,9 @@ export default function UserMonthlyReport() {
             <Input
               type="number"
               value={year}
-              onChange={(event) => setYear(parseInt(event.target.value || "0", 10))}
+              onChange={(event) =>
+                setYear(parseInt(event.target.value || "0", 10))
+              }
               className="h-12 border-white/10 bg-white/5 backdrop-blur"
               placeholder="Year"
             />
@@ -293,18 +377,44 @@ export default function UserMonthlyReport() {
               disabled={loading}
               className="h-12 border-white/20 bg-white/5 backdrop-blur transition hover:border-primary/40"
             >
-              <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
+              <RefreshCw
+                className={cn("mr-2 h-4 w-4", loading && "animate-spin")}
+              />
               Refresh
             </Button>
 
+            {/* Desktop-only */}
             <div className="hidden md:block">
               <UserProfilePdfButton
                 user={meta?.user}
                 summary={summary}
-                attendanceDays={days}
+                attendanceDays={days.map((d) => ({
+                  ...d,
+                  checkIn: formatTimeTo12Hour(d.checkIn),
+                  checkOut: formatTimeTo12Hour(d.checkOut),
+                }))}
                 monthLabel={activeMonthLabel}
                 year={year}
                 className="h-12 border-white/20 bg-white/5 backdrop-blur transition hover:border-primary/40"
+              >
+                Download Profile PDF
+              </UserProfilePdfButton>
+            </div>
+
+            {/* Mobile-only */}
+            <div className="block md:hidden">
+              <UserProfilePdfButton
+                user={meta?.user}
+                summary={summary}
+                attendanceDays={days.map((d) => ({
+                  ...d,
+                  checkIn: formatTimeTo12Hour(d.checkIn),
+                  checkOut: formatTimeTo12Hour(d.checkOut),
+                }))}
+                monthLabel={activeMonthLabel}
+                year={year}
+                variant="ghost"
+                className="text-primary hover:text-primary"
               >
                 Download Profile PDF
               </UserProfilePdfButton>
@@ -315,11 +425,15 @@ export default function UserMonthlyReport() {
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground sm:text-sm">
               <span className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
                 <CalendarDays className="h-3.5 w-3.5" />
-                {activeMonthLabel ? `${activeMonthLabel} ${year}` : `Month ${year}`}
+                {activeMonthLabel
+                  ? `${activeMonthLabel} ${year}`
+                  : `Month ${year}`}
               </span>
               <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                {presenceRate !== null ? `${presenceRate}% presence rate` : "Presence rate unavailable"}
+                {presenceRate !== null
+                  ? `${presenceRate}% presence rate`
+                  : "Presence rate unavailable"}
               </span>
               <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1">
                 <Clock className="h-3.5 w-3.5 text-primary" />
@@ -329,37 +443,33 @@ export default function UserMonthlyReport() {
                 </span>
               </span>
             </div>
-
-            <UserProfilePdfButton
-              user={meta?.user}
-              summary={summary}
-              attendanceDays={days}
-              monthLabel={activeMonthLabel}
-              year={year}
-              variant="ghost"
-              className="text-primary hover:text-primary md:hidden"
-            >
-              Download Profile PDF
-            </UserProfilePdfButton>
           </div>
         </div>
       </section>
 
+      {/* SUMMARY GRID – now uses combinedCards */}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-4">
-        {summaryValues.map((card) => {
+        {combinedCards.map((card) => {
           const IconComponent = card.icon;
           return (
             <Card
-              key={card.label}
+              key={card.key || card.label}
               className="relative overflow-hidden border border-white/10 bg-card/70 shadow-[0_20px_40px_-24px_rgba(15,23,42,0.6)] transition-transform duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[0_35px_60px_-28px_rgba(79,70,229,0.35)]"
             >
-              <div className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br", card.gradient)} />
+              <div
+                className={cn(
+                  "pointer-events-none absolute inset-0 bg-gradient-to-br",
+                  card.gradient
+                )}
+              />
               <CardContent className="relative z-10 flex items-center justify-between gap-4 p-5">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {card.label}
                   </p>
-                  <p className="text-3xl font-semibold text-foreground">{card.value}</p>
+                  <p className="text-3xl font-semibold text-foreground">
+                    {card.value}
+                  </p>
                 </div>
                 <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-primary">
                   {IconComponent ? <IconComponent className="h-5 w-5" /> : null}
@@ -375,11 +485,21 @@ export default function UserMonthlyReport() {
           <Table className="min-w-[980px]">
             <TableHeader className="sticky top-0 z-10 bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/60">
               <TableRow>
-                <TableHead className="w-[220px] text-muted-foreground">Date</TableHead>
-                <TableHead className="w-[180px] text-muted-foreground">Status</TableHead>
-                <TableHead className="w-[140px] text-muted-foreground">Check-in</TableHead>
-                <TableHead className="w-[140px] text-muted-foreground">Check-out</TableHead>
-                <TableHead className="w-[160px] text-muted-foreground">Worked (h)</TableHead>
+                <TableHead className="w-[220px] text-muted-foreground">
+                  Date
+                </TableHead>
+                <TableHead className="w-[180px] text-muted-foreground">
+                  Status
+                </TableHead>
+                <TableHead className="w-[140px] text-muted-foreground">
+                  Check-in
+                </TableHead>
+                <TableHead className="w-[140px] text-muted-foreground">
+                  Check-out
+                </TableHead>
+                <TableHead className="w-[160px] text-muted-foreground">
+                  Worked (h)
+                </TableHead>
                 <TableHead className="text-muted-foreground">Note</TableHead>
               </TableRow>
             </TableHeader>
@@ -394,29 +514,40 @@ export default function UserMonthlyReport() {
                 ))
               ) : days.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={6}
+                    className="py-12 text-center text-sm text-muted-foreground"
+                  >
                     No attendance records for this period.
                   </TableCell>
                 </TableRow>
               ) : (
                 days.map((day) => (
-                  <TableRow key={day._id} className="border-white/5 transition-colors hover:bg-muted/40">
-                    <TableCell className="font-medium">{formatDate(day.date)}</TableCell>
+                  <TableRow
+                    key={day._id}
+                    className="border-white/5 transition-colors hover:bg-muted/40"
+                  >
+                    <TableCell className="font-medium">
+                      {formatDate(day.date)}
+                    </TableCell>
                     <TableCell>
                       <span
                         className={cn(
                           "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
-                          STATUS_PILLS[day.status] ?? "border-white/15 bg-white/5 text-foreground"
+                          STATUS_PILLS[day.status] ??
+                            "border-white/15 bg-white/5 text-foreground"
                         )}
                       >
                         <span className="h-1.5 w-1.5 rounded-full bg-current" />
                         {formatStatus(day.status)}
                       </span>
                     </TableCell>
-                    <TableCell>{hhmmOrDash(day.checkIn)}</TableCell>
-                    <TableCell>{hhmmOrDash(day.checkOut)}</TableCell>
+                    <TableCell>{formatTimeTo12Hour(day.checkIn)}</TableCell>
+                    <TableCell>{formatTimeTo12Hour(day.checkOut)}</TableCell>
                     <TableCell>
-                      {day.workedHours != null ? Number(day.workedHours).toFixed(2) : "--"}
+                      {day.workedHours != null
+                        ? Number(day.workedHours).toFixed(2)
+                        : "--"}
                     </TableCell>
                     <TableCell className="max-w-[420px] text-sm text-muted-foreground">
                       {day.note?.trim() ? day.note : "--"}
@@ -424,10 +555,11 @@ export default function UserMonthlyReport() {
                   </TableRow>
                 ))
               )}
-            </TableBody>    
+            </TableBody>
           </Table>
         </div>
       </section>
     </div>
   );
 }
+

@@ -85,11 +85,9 @@ export default function Login() {
 
       toast.success("Welcome back!");
 
+      // if they’ve got multiple roles (e.g., hr + employee), ask where to go
       if (roles.length > 1) {
-        setRolePrompt({
-          roles,
-          activeRole,
-        });
+        setRolePrompt({ roles, activeRole });
       } else {
         const target = redirectFrom || routeForRole(activeRole);
         navigate(target, { replace: true });
@@ -197,6 +195,7 @@ export default function Login() {
         </div>
       </div>
 
+      {/* role chooser if user has multiple roles */}
       <Dialog open={!!rolePrompt} onOpenChange={() => {}}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

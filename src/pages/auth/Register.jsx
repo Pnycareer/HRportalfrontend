@@ -18,20 +18,7 @@ import { BLOOD_GROUPS } from "@/components/constants/bloodGroups";
 // Shared modals (same components used by AttendanceTable)
 import DutyRosterModal from "@/components/models/DutyRosterModal";
 import OffDaysModal from "@/components/models/OffDaysModal";
-
-const DESIGNATIONS = [
-  "Developer",
-  "Branch Manager",
-  "Office Executive",
-  "Accountant",
-  "Receptionist",
-  "CSR",
-  "Office Boy",
-  "Instructor",
-  "Hr executive",
-  "MTO Hr",
-  "HOD",
-];
+import { DESIGNATIONS } from "@/components/constants/designations";
 
 export default function Register() {
   const [otpOpen, setOtpOpen] = React.useState(false);

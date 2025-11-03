@@ -42,6 +42,64 @@ export default function MonthlyBranchReport() {
     return list.sort((a, b) => String(a.fullName || "").localeCompare(String(b.fullName || "")));
   }, [grouped.sections]);
 
+  const formatStatusValueText = React.useCallback((row, key) => {
+    const base = row?.[key] || 0;
+    if (key === "short_leave") {
+      const paid = row?.short_leave_paid || 0;
+      const unpaid = row?.short_leave_unpaid || 0;
+      if (paid || unpaid) {
+        const parts = [];
+        if (paid) parts.push(`P:${paid}`);
+        if (unpaid) parts.push(`U:${unpaid}`);
+        return `${base} (${parts.join(" | ")})`;
+      }
+      return String(base);
+    }
+    if (key === "half_day") {
+      const paid = row?.half_day_paid || 0;
+      const unpaid = row?.half_day_unpaid || 0;
+      if (paid || unpaid) {
+        const parts = [];
+        if (paid) parts.push(`P:${paid}`);
+        if (unpaid) parts.push(`U:${unpaid}`);
+        return `${base} (${parts.join(" | ")})`;
+      }
+      return String(base);
+    }
+    return String(base);
+  }, []);
+
+  const renderStatusValue = React.useCallback((row, key) => {
+    const base = row?.[key] || 0;
+    if (key === "short_leave" || key === "half_day") {
+      const paidKey = key === "short_leave" ? "short_leave_paid" : "half_day_paid";
+      const unpaidKey = key === "short_leave" ? "short_leave_unpaid" : "half_day_unpaid";
+      const paid = row?.[paidKey] || 0;
+      const unpaid = row?.[unpaidKey] || 0;
+      const hasBadges = paid + unpaid > 0;
+      return (
+        <div className="flex flex-col items-end gap-1">
+          <span className="text-sm font-semibold text-foreground">{base}</span>
+          {hasBadges ? (
+            <div className="flex items-center gap-1">
+              {paid ? (
+                <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                  Paid&nbsp;{paid}
+                </span>
+              ) : null}
+              {unpaid ? (
+                <span className="inline-flex items-center rounded-full border border-rose-500/20 bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600">
+                  Unpaid&nbsp;{unpaid}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+    return <span className="text-sm font-semibold text-foreground">{base}</span>;
+  }, []);
+
   // ===== PDF EXPORT (single-table, branch-only) =====
   function downloadPdf() {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -84,15 +142,28 @@ export default function MonthlyBranchReport() {
     let pageNo = 1;
     paintBackground(pageNo);
 
-    const tableHead = ["Full Name", "Emp ID", ...ORDER.map((k) => LABELS[k])];
+    const tableHead = ["Full Name", "Emp ID", ...ORDER.map((k) => LABELS[k]), "Paid Days"];
     let cursorY = margin + 80;
 
     // ✅ single table body (no departments)
-    const body = allItems.map((r) => [
-      r.fullName,
-      r.employeeId || "",
-      ...ORDER.map((k) => r[k] || 0),
-    ]);
+    const body = allItems.map((r) => {
+      const paid =
+        r.paidDays != null
+          ? r.paidDays
+          : (r.present || 0) +
+            (r.leave || 0) +
+            (r.official_off || 0) +
+            (r.public_holiday || 0);
+
+      const statusValues = ORDER.map((k) => formatStatusValueText(r, k));
+
+      return [
+        r.fullName,
+        r.employeeId || "",
+        ...statusValues,
+        paid,
+      ];
+    });
 
     autoTable(doc, {
       head: [tableHead],
@@ -214,23 +285,36 @@ export default function MonthlyBranchReport() {
           <Table className="min-w-[980px]">
             <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
               <TableRow>
-                <TableHead className="w-[260px]">Full Name</TableHead>
-                <TableHead className="w-[120px]">Emp ID</TableHead>
-                {ORDER.map((k) => (
-                  <TableHead key={k} className="text-right">{LABELS[k]}</TableHead>
-                ))}
+              <TableHead className="w-[260px]">Full Name</TableHead>
+              <TableHead className="w-[120px]">Emp ID</TableHead>
+              {ORDER.map((k) => (
+                <TableHead key={k} className="text-right">{LABELS[k]}</TableHead>
+              ))}
+              <TableHead className="text-right">Paid Days</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {allItems.map((r) => (
-                <TableRow key={`${r.employeeId || r.fullName}`} className="odd:bg-muted/40 hover:bg-muted/60 transition-colors">
-                  <TableCell className="font-medium">{r.fullName}</TableCell>
-                  <TableCell className="text-muted-foreground">{r.employeeId}</TableCell>
-                  {ORDER.map((k) => (
-                    <TableCell key={k} className="text-right">{r[k] || 0}</TableCell>
-                  ))}
-                </TableRow>
-              ))}
+              {allItems.map((r) => {
+                const paid =
+                  r.paidDays != null
+                    ? r.paidDays
+                    : (r.present || 0) +
+                      (r.leave || 0) +
+                      (r.official_off || 0) +
+                      (r.public_holiday || 0);
+                return (
+                  <TableRow key={`${r.employeeId || r.fullName}`} className="odd:bg-muted/40 hover:bg-muted/60 transition-colors">
+                    <TableCell className="font-medium">{r.fullName}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.employeeId}</TableCell>
+                    {ORDER.map((k) => (
+                      <TableCell key={k} className="text-right">
+                        {renderStatusValue(r, k)}
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-right">{paid}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -238,3 +322,8 @@ export default function MonthlyBranchReport() {
     </div>
   );
 }
+
+
+
+
+

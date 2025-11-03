@@ -148,13 +148,13 @@ export default function DutyRosterModal({
             </div>
           </div>
 
-          <label className="inline-flex items-center gap-2 text-sm">
+          {/* <label className="inline-flex items-center gap-2 text-sm">
             <Checkbox
               checked={!!state.overnight}
               onCheckedChange={(v) => setState((s) => ({ ...s, overnight: !!v }))}
             />
             Overnight (ends next day)
-          </label>
+          </label> */}
         </div>
 
         <DialogFooter className="gap-2">

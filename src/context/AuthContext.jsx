@@ -6,16 +6,21 @@ const AuthContext = React.createContext(null);
 
 function normalizeUserPayload(payload) {
   if (!payload) return null;
-  const roles = Array.isArray(payload.roles) ? payload.roles : [];
+
+  const roles = Array.isArray(payload.roles)
+    ? payload.roles.filter(Boolean)
+    : (payload.role ? [payload.role] : []);
+
   const activeRole =
     payload.activeRole ||
     payload.role ||
     (roles.length ? roles[0] : null);
+
   return {
     ...payload,
     roles,
     activeRole,
-    role: activeRole,
+    role: activeRole, // keep back-compat for guards
   };
 }
 
@@ -46,6 +51,7 @@ export function AuthProvider({ children }) {
       const { data } = await api.post("/api/auth/login", { email, password });
       const normalized = normalizeUserPayload(data);
       setUser(normalized);
+      // pull server truth (cookie/JWT may be refreshed)
       await checkAuth();
       return normalized;
     },
@@ -63,6 +69,7 @@ export function AuthProvider({ children }) {
   const switchRole = useCallback(
     async (role) => {
       const { data } = await api.post("/api/auth/switch-role", { role });
+      // refresh user (server will set new JWT w/ activeRole)
       await checkAuth();
       return normalizeUserPayload({
         ...(user || {}),

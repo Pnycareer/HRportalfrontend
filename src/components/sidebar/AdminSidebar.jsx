@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   PersonStandingIcon,
   ChevronRight,
+  SheetIcon
 } from "lucide-react";
 
 const groups = [
@@ -73,6 +74,11 @@ const groups = [
         to: "/admin/fuel-requisition-report",
         icon: Fuel,
         label: "Fuel Requisition",
+      },
+      {
+        to: "/admin/salary-sheet",
+        icon: SheetIcon,
+        label: "Salary Sheet",
       },
     ],
   },

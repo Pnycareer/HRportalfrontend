@@ -8,50 +8,82 @@ function nowYM() {
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
+function createTotalsSeed() {
+  const totals = {};
+  for (const key of ORDER) totals[key] = 0;
+  return totals;
+}
+
 export default function useAttendanceReport() {
   const { year: y0, month: m0 } = nowYM();
-  const [branch, setBranch] = React.useState("all"); // or first branch from your list
+  const [branch, setBranch] = React.useState("all");
   const [year, setYear] = React.useState(y0);
   const [month, setMonth] = React.useState(m0);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
-  const [rows, setRows] = React.useState([]); // flat list from server
+  const [rows, setRows] = React.useState([]);
+  const [meta, setMeta] = React.useState(null);
 
   React.useEffect(() => {
     let alive = true;
     (async () => {
-      setLoading(true); setError("");
+      setLoading(true);
+      setError("");
       try {
         const { data } = await api.get("/api/attendance/report/monthly", {
           params: { branch, year, month },
         });
-        if (alive) setRows(data?.rows || []);
+        if (!alive) return;
+        setRows(data?.rows || []);
+        setMeta(data?.meta || null);
       } catch (e) {
-        if (alive) setError(e?.response?.data?.message || e?.message || "Failed to load report");
+        if (!alive) return;
+        setError(e?.response?.data?.message || e?.message || "Failed to load report");
+        setRows([]);
+        setMeta(null);
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [branch, year, month]);
 
-  // group by department on client for clean rendering + per-dept totals
   const grouped = React.useMemo(() => {
     const map = new Map();
-    for (const r of rows) {
-      const key = r.department || "—";
+    for (const row of rows) {
+      const key = row.department || "--";
       if (!map.has(key)) {
-        map.set(key, { dept: key, items: [], totals: ORDER.reduce((a,k)=> (a[k]=0, a), {}) });
+        map.set(key, { dept: key, items: [], totals: createTotalsSeed() });
       }
-      const g = map.get(key);
-      g.items.push(r);
-      for (const k of ORDER) g.totals[k] += r[k] || 0;
+      const bucket = map.get(key);
+      bucket.items.push(row);
+      for (const status of ORDER) {
+        bucket.totals[status] += row[status] || 0;
+      }
     }
-    // grand totals too
-    const grand = ORDER.reduce((a,k)=> (a[k]=0, a), {});
-    for (const { totals } of map.values()) for (const k of ORDER) grand[k] += totals[k];
+
+    const grand = createTotalsSeed();
+    for (const { totals } of map.values()) {
+      for (const status of ORDER) {
+        grand[status] += totals[status];
+      }
+    }
+
     return { sections: Array.from(map.values()), grand };
   }, [rows]);
 
-  return { branch, setBranch, year, setYear, month, setMonth, loading, error, grouped };
+  return {
+    branch,
+    setBranch,
+    year,
+    setYear,
+    month,
+    setMonth,
+    loading,
+    error,
+    grouped,
+    meta,
+  };
 }
