@@ -1,5 +1,9 @@
 // utils/time.js
 
+import { BRANCHES_BY_CITY } from "@/components/constants/locations";
+
+/* ===================== basics you already had ===================== */
+
 // zero-pad
 export function pad2(n) {
   return String(n).padStart(2, "0");
@@ -23,7 +27,12 @@ export function hhmmToMinutes(hhmm) {
   return h * 60 + m;
 }
 
-// minutes -> "HH:mm" (keeps sign if you pass negatives, but you shouldn't here)
+// alias to satisfy imports that expect `toMinutes`
+export function toMinutes(hhmm) {
+  return hhmmToMinutes(hhmm);
+}
+
+// minutes -> "HH:mm" (keeps sign if negatives)
 export function minutesToHHMM(mins) {
   if (mins == null || Number.isNaN(mins)) return "";
   const sign = mins < 0 ? "-" : "";
@@ -33,20 +42,35 @@ export function minutesToHHMM(mins) {
   return `${sign}${h}:${m}`;
 }
 
+// human label like "45 min"
+export function minutesToHuman(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) return "0 min";
+  return `${minutes} min`;
+}
+
 // simple local YYYY-MM-DD
 export function todayYMD() {
   const d = new Date();
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
+/* ===================== helpers you referenced elsewhere ===================== */
 
-
-// checking needed
+// "HH:mm" -> "h:mm AM/PM"
+export function hhmmTo12hLabel(hhmm) {
+  const mins = hhmmToMinutes(hhmm);
+  if (mins == null) return "--";
+  let h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${pad2(m)} ${ampm}`;
+}
 
 export function formatClockLabel(value) {
   if (!value) return "--";
 
-  // If it's "HH:mm", keep using the local 12h label logic
+  // If it's "HH:mm", format locally as 12h
   if (typeof value === "string" && /^\d{1,2}:\d{2}$/.test(value)) {
     return hhmmTo12hLabel(value);
   }
@@ -64,13 +88,6 @@ export function formatClockLabel(value) {
   return date.toLocaleTimeString([], isTZAware ? { ...opts, timeZone: "UTC" } : opts);
 }
 
-
-export function minutesToHuman(minutes) {
-  if (!Number.isFinite(minutes) || minutes <= 0) return "0 min";
-  return `${minutes} min`;
-}
-
-
 export function formatDateLabel(value) {
   if (!value) return "--";
   const date = new Date(value);
@@ -81,4 +98,60 @@ export function formatDateLabel(value) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+/* ===================== new exports your build expects ===================== */
+
+// ISO -> "YYYY-MM-DD" (UTC safe for input[type=date])
+export function isoToDateInput(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getUTCFullYear();
+  const m = pad2(d.getUTCMonth() + 1);
+  const day = pad2(d.getUTCDate());
+  return `${y}-${m}-${day}`;
+}
+
+// ISO -> "HH:mm" in UTC
+export function isoToHHmmUTC(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+}
+
+// determinstic id for a slot
+export function createSlotId(dateYmd, startHHmm, endHHmm) {
+  return [dateYmd || "", startHHmm || "", endHHmm || ""].join("|");
+}
+
+// guess city by branch using your BRANCHES_BY_CITY
+export function guessCityByBranch(branch) {
+  if (!branch) return "";
+  for (const [city, list] of Object.entries(BRANCHES_BY_CITY || {})) {
+    if ((list || []).includes(branch)) return city;
+  }
+  return "";
+}
+
+// build an initial slot object used in overtime pages
+export function makeInitialSlot(dateYmd, opts = {}) {
+  const {
+    start = "09:00",
+    end = "17:00",
+    branch = "",
+    city = guessCityByBranch(branch) || "",
+    note = "",
+  } = opts;
+
+  return {
+    id: createSlotId(dateYmd, start, end),
+    date: dateYmd || "",
+    start: normalizeHHmm(start) || "09:00",
+    end: normalizeHHmm(end) || "17:00",
+    note,
+    branch,
+    city,
+  };
 }
