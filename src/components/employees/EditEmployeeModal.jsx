@@ -16,12 +16,14 @@ import { DESIGNATIONS } from "@/components/constants/designations";
 import { CITIES, getBranchesForCity } from "@/components/constants/locations";
 import OffDaysModal from "../models/OffDaysModal";
 import DutyRosterModal from "../models/DutyRosterModal";
+import OffDaysHistoryModal from "../models/OffDaysHistoryModal"; // 👈 NEW
 
 import InputField from "@/components/form/InputField";
 import SelectField from "@/components/form/SelectField";
 import CheckMarkToggle from "@/components/form/CheckMarkToggle";
 
 const defaultRoles = ["superadmin", "admin", "hr", "employee"];
+const STATUS_OPTIONS = ["current","probation","apprentice","intern","left"];
 
 function ensureValidActiveRole(roles, activeRole) {
   if (!Array.isArray(roles) || roles.length === 0) return null;
@@ -48,6 +50,7 @@ export default function EditEmployeeModal({
   const bloodGroupSelectValue = editForm.bloodGroup || "none";
   const [offDaysOpen, setOffDaysOpen] = React.useState(false);
   const [rosterOpen, setRosterOpen] = React.useState(false);
+  const [showHistory, setShowHistory] = React.useState(false); // 👈 NEW
 
   // city → branches
   const [branches, setBranches] = React.useState(
@@ -79,6 +82,13 @@ export default function EditEmployeeModal({
     if (editForm.designation && !set.has(editForm.designation)) set.add(editForm.designation);
     return Array.from(set);
   }, [editForm.designation]);
+
+  const statusValue = editForm.employmentStatus || "current";
+  const showLeavingDate = statusValue === "resigned" || statusValue === "left";
+
+  const offDaysHistory = Array.isArray(editForm.officialOffDaysChangeLog)
+    ? editForm.officialOffDaysChangeLog
+    : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,6 +185,29 @@ export default function EditEmployeeModal({
                         </div>
                       </div>
 
+                      {/* Employment Status */}
+                      <SelectField
+                        label="Employment Status"
+                        value={statusValue}
+                        onValueChange={(val) => setEditForm((s) => ({ ...s, employmentStatus: val }))}
+                      >
+                        {STATUS_OPTIONS.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectField>
+
+                      {/* Leaving Date (conditional) */}
+                      {showLeavingDate && (
+                        <InputField
+                          label="Leaving Date"
+                          type="date"
+                          value={editForm.leavingDate || ""}
+                          onChange={(e) => setEditForm((s) => ({ ...s, leavingDate: e.target.value }))}
+                        />
+                      )}
+
                       {/* Blood group */}
                       <SelectField
                         label="Blood Group"
@@ -192,7 +225,7 @@ export default function EditEmployeeModal({
                       </SelectField>
                     </div>
 
-                    {/* Off days */}
+                    {/* Off days + History */}
                     <div className="rounded-xl border border-dashed bg-muted/30 p-4">
                       <div className="flex flex-wrap items-center gap-2">
                         {currentDays.length ? (
@@ -204,14 +237,26 @@ export default function EditEmployeeModal({
                         ) : (
                           <span className="text-xs text-muted-foreground">No off days selected yet.</span>
                         )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="ml-auto"
-                          onClick={() => setOffDaysOpen(true)}
-                        >
-                          Configure Off Days
-                        </Button>
+
+                        <div className="ml-auto flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setOffDaysOpen(true)}
+                          >
+                            Configure
+                          </Button>
+
+                          {offDaysHistory.length > 0 && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setShowHistory(true)}
+                            >
+                              View History
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </section>
@@ -349,6 +394,14 @@ export default function EditEmployeeModal({
                         onChange={(e) => setEditForm((s) => ({ ...s, salary: e.target.value }))}
                         description="Leave blank to clear salary."
                       />
+
+                      {/* Bank Name (new) */}
+                      <InputField
+                        label="Bank Name"
+                        value={editForm.bankName || ""}
+                        onChange={(e) => setEditForm((s) => ({ ...s, bankName: e.target.value }))}
+                      />
+
                       <InputField
                         label="Bank Account No"
                         value={editForm.bankAccountNo || ""}
@@ -397,6 +450,14 @@ export default function EditEmployeeModal({
         onOpenChange={setRosterOpen}
         initialRoster={editForm.dutyRoster}
         onSave={(formatted) => setEditForm((s) => ({ ...s, dutyRoster: formatted }))}
+      />
+      
+
+      {/* Off Days History (NEW) */}
+      <OffDaysHistoryModal
+        open={showHistory}
+        onOpenChange={setShowHistory}
+        history={offDaysHistory}
       />
     </Dialog>
   );

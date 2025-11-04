@@ -88,6 +88,16 @@ export default function MarkAttendance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ⛔️ Hide employees with employmentStatus = left/resigned
+  const attendanceRows = useMemo(
+    () =>
+      filtered.filter((u) => {
+        const s = String(u.employmentStatus || "").toLowerCase();
+        return s !== "left" && s !== "resigned";
+      }),
+    [filtered]
+  );
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -170,7 +180,7 @@ export default function MarkAttendance() {
         </div>
       ) : (
         <AttendanceTable
-          rows={filtered}
+          rows={attendanceRows}
           persisted={persisted}
           changes={changes}
           onStatusChange={(id, status) => setRowChange(id, { status })}

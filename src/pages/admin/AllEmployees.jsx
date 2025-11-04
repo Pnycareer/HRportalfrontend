@@ -64,9 +64,12 @@ export default function AllEmployees() {
     branch: "",
     city: "",
     salary: "",
+    bankName: "", // ✅ NEW
     bankAccountNo: "",
     bankAccountTitle: "",
     bankBranchCode: "",
+    employmentStatus: "current", // ✅ NEW
+    leavingDate: "", // ✅ NEW (string date)
   });
 
   // city filter (to drive branch list)
@@ -105,9 +108,15 @@ export default function AllEmployees() {
       branch: u.branch || "",
       city: u.city || city,
       salary: (u.salary ?? "") === null ? "" : String(u.salary),
+      bankName: u.bankName || "", // ✅
       bankAccountNo: u.bankAccountNo || "",
       bankAccountTitle: u.bankAccountTitle || "",
       bankBranchCode: u.bankBranchCode || "",
+      employmentStatus: u.employmentStatus || "current", // ✅
+      leavingDate: u.leavingDate ? String(u.leavingDate).slice(0, 10) : "", // ✅
+      officialOffDaysChangeLog: Array.isArray(u.officialOffDaysChangeLog)
+        ? u.officialOffDaysChangeLog
+        : [],
     });
     setEditOpen(true);
   }
@@ -124,6 +133,14 @@ export default function AllEmployees() {
         editForm.activeRole
       );
 
+      const rawSalary = editForm.salary;
+      const salaryPayload =
+        rawSalary === null ||
+        rawSalary === undefined ||
+        String(rawSalary).trim() === ""
+          ? null
+          : Number(rawSalary);
+
       await updateEmployee(editing._id, {
         fullName: editForm.fullName,
         email: editForm.email,
@@ -138,10 +155,13 @@ export default function AllEmployees() {
         contactNumber: editForm.contactNumber,
         branch: editForm.branch,
         city: editForm.city,
-        salary: editForm.salary === "" ? null : Number(editForm.salary),
+        salary: salaryPayload,
+        bankName: editForm.bankName,
         bankAccountNo: editForm.bankAccountNo,
         bankAccountTitle: editForm.bankAccountTitle,
         bankBranchCode: editForm.bankBranchCode,
+        employmentStatus: editForm.employmentStatus,
+        leavingDate: editForm.leavingDate || null,
       });
       toast.success("Employee updated");
       setEditOpen(false);
@@ -232,7 +252,7 @@ export default function AllEmployees() {
         {loading ? (
           <div className="p-6 text-sm text-muted-foreground">Loading…</div>
         ) : (
-          <div className="max-h-[calc(100vh-260px)] overflow-auto">
+          <div className="min-h-screen overflow-auto">
             <EmployeesTable
               rows={filtered}
               onEdit={(u) => openEdit(u)}

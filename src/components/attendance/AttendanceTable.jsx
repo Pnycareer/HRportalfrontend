@@ -486,7 +486,7 @@ export default function AttendanceTable({
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={closeSubStatusModal}>Close</Button>
+            <Button variant="outline" onClick={closeSubStatusModal}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
