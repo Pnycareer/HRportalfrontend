@@ -141,7 +141,7 @@ export default function EditEmployeeModal({
                       />
                       <InputField
                         label="Contact Number"
-                        type="number"
+                        type="tel"
                         placeholder="e.g. 0300-1234567"
                         value={editForm.contactNumber || ""}
                         onChange={(e) => setEditForm((s) => ({ ...s, contactNumber: e.target.value }))}
