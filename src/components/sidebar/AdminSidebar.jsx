@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard,
   Users,
   CalendarCheck2,
-  ClipboardList,
   FileText,
   BarChart3,
   Clock3,
@@ -18,7 +18,7 @@ import {
   ChevronLeft,
   PersonStandingIcon,
   ChevronRight,
-  SheetIcon
+  SheetIcon,
 } from "lucide-react";
 
 const groups = [
@@ -84,6 +84,8 @@ const groups = [
   },
 ];
 
+const MotionNavLink = motion(NavLink);
+
 const STORAGE_KEY = "adminSidebarCollapsed";
 
 export default function Sidebar() {
@@ -98,17 +100,16 @@ export default function Sidebar() {
     }
   });
 
-  // broadcast state to layout so it can adjust padding
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
     } catch {}
     window.dispatchEvent(
-      new CustomEvent("admin:sidebar-collapsed", { detail: { collapsed } })
+      new CustomEvent("admin:sidebar-collapsed", { detail: { collapsed } }),
     );
   }, [collapsed]);
 
-  const widthClass = collapsed ? "w-16" : "w-72";
+  const widthClass = collapsed ? "md:w-16" : "md:w-72";
   const filteredGroups = useMemo(() => {
     if (!user) return groups;
     const activeRole = user.activeRole || user.role;
@@ -153,117 +154,167 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-40 hidden md:flex flex-col border-r bg-background transition-[width] duration-200 ease-out",
-        widthClass
+        "group/sidebar relative z-40 flex h-full w-full flex-col overflow-hidden rounded-3xl border border-white/40 bg-white/80 bg-gradient-to-br from-white/95 via-white/70 to-slate-50/80 shadow-[0_20px_44px_rgba(15,23,42,0.12)] backdrop-blur-2xl transition-[width] duration-300 ease-out",
+        "md:fixed md:inset-y-0 md:left-0 md:rounded-r-3xl md:border-r md:w-auto",
+        widthClass,
       )}
     >
-      {/* Header */}
-      <div className={cn("flex items-center gap-2 px-3 py-3 border-b")}>
-        <img
-          src={avatarSrc}
-          alt="User Avatar"
-          className="h-9 w-9 rounded-full object-cover ring-2 ring-muted"
-        />
-        {!collapsed && (
-          <div className="min-w-0">
-            <div className="text-sm font-semibold leading-tight">
-              HR Admin Panel
-            </div>
-            <div className="text-xs text-muted-foreground leading-tight truncate">
-              {user?.email || ""}
-            </div>
-          </div>
-        )}
-        <button
-          className={cn(
-            "ml-auto inline-flex items-center justify-center rounded-md border px-2 py-1 text-xs hover:bg-muted transition",
-            collapsed && "mx-auto"
-          )}
-          onClick={() => setCollapsed((v) => !v)}
-          title={collapsed ? "Expand" : "Collapse"}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </button>
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-sky-300/35 via-transparent to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-indigo-300/30 via-transparent to-transparent" />
+        <div className="absolute left-1/2 top-1/3 h-48 w-48 -translate-x-1/2 rounded-full bg-sky-200/18 blur-3xl" />
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto p-2">
-        {filteredGroups.map((group) => (
-          <div key={group.label} className="mb-3">
-            {!collapsed && (
-              <div className="px-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                {group.label}
-              </div>
-            )}
-            <ul className="space-y-1">
-              {group.items.map((item) => (
-                <li key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    className={({ isActive }) =>
-                      cn(
-                        "group flex items-center rounded-lg px-2 py-2 text-sm hover:bg-muted transition",
-                        isActive
-                          ? "bg-muted font-medium"
-                          : "text-muted-foreground",
-                        collapsed ? "justify-center" : "gap-3"
-                      )
-                    }
-                    end
-                    title={collapsed ? item.label : undefined}
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    {!collapsed && (
-                      <span className="truncate">{item.label}</span>
-                    )}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
+      <div className="relative z-10 flex h-full w-full flex-col">
+        <div className="flex items-center gap-3 px-3.5 pb-4 pt-4">
+          <div className="relative">
+            <img
+              src={avatarSrc}
+              alt="User Avatar"
+              className="h-10 w-10 rounded-full object-cover ring-2 ring-white/80 shadow-md shadow-sky-100/50"
+            />
+            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-white bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.6)]" />
           </div>
-        ))}
-      </nav>
-
-      {/* Footer */}
-      <div className="border-t p-3">
-        <div
-          className={cn(
-            "flex items-center gap-3 mb-3",
-            collapsed && "justify-center"
-          )}
-        >
-          <div className="h-9 w-9 rounded-full bg-muted" />
           {!collapsed && (
             <div className="min-w-0">
-              <div className="text-sm font-medium truncate">
-                {user?.name || user?.fullName || "Admin"}
+              <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                HR Suite
               </div>
-              <div className="text-xs text-muted-foreground truncate">
+              <div className="text-base font-semibold leading-tight text-slate-900">
+                Control Panel
+              </div>
+              <div className="truncate text-xs leading-tight text-slate-500">
                 {user?.email || ""}
               </div>
             </div>
           )}
-          {!collapsed && (
-            <Settings className="ml-auto h-4 w-4 text-muted-foreground" />
-          )}
+          <motion.button
+            className={cn(
+              "ml-auto inline-flex items-center justify-center rounded-full border border-white/70 bg-white/80 p-2 text-slate-500 shadow-sm transition",
+              collapsed && "mx-auto",
+            )}
+            onClick={() => setCollapsed((v) => !v)}
+            title={collapsed ? "Expand" : "Collapse"}
+            whileHover={{ scale: 1.05, rotate: collapsed ? 0 : 3 }}
+            whileTap={{ scale: 0.92 }}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </motion.button>
         </div>
 
-        <button
-          onClick={handleLogout}
-          disabled={loggingOut}
-          className={cn(
-            "w-full rounded-xl border px-3 py-2 text-sm transition flex items-center justify-center gap-2 hover:bg-muted disabled:opacity-60",
-            collapsed && "px-0"
-          )}
-          title={collapsed ? "Logout" : undefined}
-        >
-          <LogOut className="h-4 w-4" />
-          {!collapsed && (loggingOut ? "Logging out…" : "Logout")}
-        </button>
+        <nav className="flex-1 overflow-y-auto px-2 pb-6 pt-2">
+          {filteredGroups.map((group) => (
+            <div key={group.label} className="mb-6">
+              {!collapsed && (
+                <div className="mb-3 flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-400">
+                  <span className="h-px flex-1 bg-gradient-to-r from-slate-200 via-slate-200/50 to-transparent" />
+                  <span>{group.label}</span>
+                </div>
+              )}
+              <ul className="space-y-1.5">
+                {group.items.map((item) => (
+                  <li key={item.to} className="relative">
+                    <MotionNavLink
+                      to={item.to}
+                      whileHover={{
+                        x: collapsed ? 0 : 6,
+                        scale: collapsed ? 1.05 : 1.02,
+                      }}
+                      whileFocus={{ x: collapsed ? 0 : 6 }}
+                      transition={{ duration: 0.18, ease: "easeOut" }}
+                      className={({ isActive }) =>
+                        cn(
+                          "relative flex items-center rounded-xl px-2.5 py-2 text-sm font-medium text-slate-500 transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200/70",
+                          collapsed ? "justify-center" : "gap-3 pl-3 pr-3.5",
+                          isActive && "text-slate-900",
+                        )
+                      }
+                      end
+                      title={collapsed ? item.label : undefined}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {isActive && (
+                            <motion.span
+                              layoutId="sidebar-active"
+                              className="absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-sky-400/25 via-sky-300/15 to-transparent shadow-lg shadow-sky-100/45"
+                              transition={{
+                                type: "spring",
+                                stiffness: 360,
+                                damping: 32,
+                              }}
+                            />
+                          )}
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          {!collapsed && <span className="truncate">{item.label}</span>}
+                          {!collapsed && (
+                            <motion.span
+                              layout="position"
+                              className="pointer-events-none absolute right-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.45)]"
+                              initial={false}
+                              animate={{
+                                opacity: isActive ? 1 : 0,
+                                scale: isActive ? 1 : 0.55,
+                              }}
+                              transition={{ duration: 0.2 }}
+                            />
+                          )}
+                        </>
+                      )}
+                    </MotionNavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        <div className="relative mt-auto px-3.5 pb-4 pt-3">
+          <div
+            className={cn(
+              "flex items-center gap-3 rounded-2xl border border-white/60 bg-white/70 px-3 py-2.5 shadow-inner shadow-white/40 backdrop-blur-sm",
+              collapsed && "justify-center px-2",
+            )}
+          >
+            <div className="relative">
+              <img
+                src={avatarSrc}
+                alt="User Avatar"
+                className="h-9 w-9 rounded-full object-cover"
+              />
+              <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border border-white bg-emerald-400" />
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-900">
+                  {user?.name || user?.fullName || "Admin"}
+                </div>
+                <div className="truncate text-xs text-slate-500">
+                  {user?.email || ""}
+                </div>
+              </div>
+            )}
+            {!collapsed && <Settings className="ml-auto h-4 w-4 text-slate-400" />}
+          </div>
+
+          <motion.button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className={cn(
+              "mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 via-sky-500 to-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-200/60 transition hover:from-sky-400 hover:via-sky-500 hover:to-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/60 disabled:cursor-not-allowed disabled:opacity-70",
+              collapsed && "px-0",
+            )}
+            title={collapsed ? "Logout" : undefined}
+            whileTap={{ scale: 0.95 }}
+          >
+            <LogOut className="h-4 w-4" />
+            {!collapsed && (loggingOut ? "Logging out..." : "Logout")}
+          </motion.button>
+        </div>
       </div>
     </aside>
   );
