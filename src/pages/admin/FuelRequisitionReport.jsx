@@ -158,9 +158,10 @@ export default function FuelRequisitionReport() {
         return sum + amount;
       }, 0);
 
-      const accentColor = [54, 99, 143];
-      const lightAccent = [241, 246, 251];
-      const textMuted = [95, 99, 104];
+      const primaryText = [34, 34, 34];
+      const textMuted = [102, 102, 102];
+      const subtleBackground = [247, 247, 247];
+      const lineColor = [210, 210, 210];
 
       const buildPdf = (densityIndex) => {
         const layout = LAYOUT_STEPS[Math.min(densityIndex, LAYOUT_STEPS.length - 1)];
@@ -169,33 +170,30 @@ export default function FuelRequisitionReport() {
         const pageHeight = pdf.internal.pageSize.getHeight();
         const margin = layout.margin;
         const contentWidth = pageWidth - margin * 2;
-        const signatureTop = pageHeight - 18;
-
-        const headerHeight = layout.headerFont + 6;
-        pdf.setFillColor(...accentColor);
-        pdf.rect(0, 0, pageWidth, headerHeight, "F");
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(layout.headerFont);
-        pdf.text("Fuel Requisition", margin, headerHeight - 6);
-
         const headerMonth = `Month: ${monthLabel || "-"}`;
-        pdf.setFontSize(layout.subFont);
-        pdf.text(headerMonth, pageWidth - margin - pdf.getTextWidth(headerMonth), headerHeight - 6);
+        const headerY = margin;
 
-        let cursorY = headerHeight + 4;
-        pdf.setTextColor(0, 0, 0);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...primaryText);
+        pdf.setFontSize(layout.headerFont);
+        pdf.text("Fuel Requisition", margin, headerY);
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(layout.subFont);
+        pdf.setTextColor(...primaryText);
+        pdf.text(headerMonth, pageWidth - margin - pdf.getTextWidth(headerMonth), headerY);
+
+        let cursorY = headerY + layout.headerFont + 4;
+        pdf.setDrawColor(...lineColor);
+        pdf.line(margin, cursorY, pageWidth - margin, cursorY);
+        cursorY += 6;
+
         pdf.setFontSize(layout.titleFont);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...primaryText);
         pdf.text("Requisition Form", margin, cursorY);
 
         cursorY += layout.subFont + 1;
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(layout.subFont);
-        pdf.setTextColor(...textMuted);
-        pdf.text(`Employee: ${displayName}`, margin, cursorY);
-        pdf.setTextColor(0, 0, 0);
-
-        cursorY += 4;
 
         const infoTop = cursorY;
         const columns = 3;
@@ -203,8 +201,8 @@ export default function FuelRequisitionReport() {
         const columnWidth = contentWidth / columns;
         const infoBoxHeight = perColumn * layout.infoRowHeight + 4;
 
-        pdf.setFillColor(...lightAccent);
-        pdf.setDrawColor(225, 229, 234);
+        pdf.setFillColor(...subtleBackground);
+        pdf.setDrawColor(...lineColor);
         pdf.roundedRect(margin, infoTop, contentWidth, infoBoxHeight, 3, 3, "F");
         pdf.roundedRect(margin, infoTop, contentWidth, infoBoxHeight, 3, 3);
 
@@ -216,16 +214,19 @@ export default function FuelRequisitionReport() {
 
           pdf.setFont("helvetica", "bold");
           pdf.setFontSize(layout.infoLabel);
+          pdf.setTextColor(...primaryText);
           pdf.text(item.label, baseX, baseY);
           pdf.setFont("helvetica", "normal");
           pdf.setFontSize(layout.infoValue);
+          pdf.setTextColor(...textMuted);
           const valueLines = pdf.splitTextToSize(String(item.value ?? "-"), columnWidth - 6);
           pdf.text(valueLines, baseX, baseY + 3.4);
         });
+        pdf.setTextColor(...primaryText);
 
         cursorY = infoTop + infoBoxHeight + 4;
 
-        pdf.setDrawColor(225, 229, 234);
+        pdf.setDrawColor(...lineColor);
         pdf.line(margin, cursorY, pageWidth - margin, cursorY);
         cursorY += 3;
 
@@ -254,12 +255,12 @@ export default function FuelRequisitionReport() {
             lineHeight: layout.lineHeight,
             overflow: "linebreak",
             valign: "middle",
-            lineColor: [210, 215, 220],
+            lineColor,
             lineWidth: 0.2,
           },
           headStyles: {
-            fillColor: [234, 243, 255],
-            textColor: [35, 40, 45],
+            fillColor: [245, 245, 245],
+            textColor: primaryText,
             fontStyle: "bold",
             halign: "center",
             fontSize: layout.headFont,
@@ -273,8 +274,8 @@ export default function FuelRequisitionReport() {
             5: { cellWidth: colStatus, halign: "center" },
           },
           footStyles: footRow ? {
-            fillColor: [240, 240, 240],
-            textColor: [35, 40, 45],
+            fillColor: [242, 242, 242],
+            textColor: primaryText,
             fontStyle: "bold",
             fontSize: layout.tableFont,
           } : undefined,
@@ -290,9 +291,9 @@ export default function FuelRequisitionReport() {
         if (metaCursorY <= metaTopLimit) {
           pdf.setFont("helvetica", "italic");
           pdf.setFontSize(layout.noteFont);
-          pdf.setTextColor(120, 120, 120);
+          pdf.setTextColor(...textMuted);
           pdf.text("Totals reflect only verified line items.", margin, metaCursorY);
-          pdf.setTextColor(0, 0, 0);
+          pdf.setTextColor(...primaryText);
           metaCursorY += 3;
         }
 
@@ -302,7 +303,9 @@ export default function FuelRequisitionReport() {
           const created = result.createdAt
             ? `Created: ${new Date(result.createdAt).toLocaleString()}`
             : "Created: -";
+          pdf.setTextColor(...textMuted);
           pdf.text(created, pageWidth - margin - pdf.getTextWidth(created), metaCursorY);
+          pdf.setTextColor(...primaryText);
           metaCursorY += 3.5;
         }
 

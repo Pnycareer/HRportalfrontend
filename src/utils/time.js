@@ -135,23 +135,23 @@ export function guessCityByBranch(branch) {
   return "";
 }
 
-// build an initial slot object used in overtime pages
-export function makeInitialSlot(dateYmd, opts = {}) {
+export function makeInitialSlot(dateYmd = "", opts = {}) {
   const {
-    start = "09:00",
-    end = "17:00",
+    start = "",
+    end = "",
     branch = "",
     city = guessCityByBranch(branch) || "",
     note = "",
   } = opts;
 
   return {
-    id: createSlotId(dateYmd, start, end),
-    date: dateYmd || "",
-    start: normalizeHHmm(start) || "09:00",
-    end: normalizeHHmm(end) || "17:00",
+    id: crypto.randomUUID(),   // unique per slot
+    date: dateYmd,
+    start: normalizeHHmm(start),
+    end: normalizeHHmm(end),
     note,
     branch,
     city,
   };
 }
+
