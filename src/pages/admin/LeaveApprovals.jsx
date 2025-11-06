@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
@@ -78,9 +77,15 @@ const emptyHrDraft = {
   receivedDateTime: "",
   employmentStatus: "",
   decisionForForm: "not_applicable",
+  remarks: "",
 };
 
-const defaultAllowance = { allowed: 12, used: 0, remaining: 12, monthlyUsed: 0 };
+const defaultAllowance = {
+  allowed: 12,
+  used: 0,
+  remaining: 12,
+  monthlyUsed: 0,
+};
 
 function toNumberOrDefault(value, fallback) {
   const num = Number(value);
@@ -103,6 +108,7 @@ function buildHrDraft(leave) {
     receivedDateTime: formatDatetimeLocal(section.receivedAt),
     employmentStatus: section.employmentStatus || "",
     decisionForForm: section.decisionForForm || "not_applicable",
+    remarks: section.remarks || "",
   };
 }
 
@@ -168,6 +174,7 @@ function buildHrPayload(draft) {
     receivedAt: toIsoString(draft.receivedDateTime, true),
     employmentStatus: draft.employmentStatus || null,
     decisionForForm: draft.decisionForForm || "not_applicable",
+    remarks: draft.remarks || "",
   };
 }
 
@@ -189,47 +196,24 @@ export default function LeaveApprovals() {
     loading,
     saving,
     fetchLeaves,
-    updateLeaveStatus,
     updateLeave,
   } = useLeaves({
     status: "pending",
   });
+
   const [statusFilter, setStatusFilter] = React.useState("pending");
   const [teamLeadFilter, setTeamLeadFilter] = React.useState("all");
   const [detailOpen, setDetailOpen] = React.useState(false);
   const [selected, setSelected] = React.useState(null);
-  const [decision, setDecision] = React.useState({
-    status: "pending",
-    remark: "",
-  });
   const [hrDraft, setHrDraft] = React.useState(emptyHrDraft);
   const [allowanceInfo, setAllowanceInfo] = React.useState(defaultAllowance);
   const [hrUsers, setHrUsers] = React.useState([]);
   const [hrLoading, setHrLoading] = React.useState(false);
   const allowanceRequestIdRef = React.useRef(0);
 
-  const selectedCategoryLabel =
-    selected &&
-    (leaveCategoryOptions.find((opt) => opt.value === selected.leaveCategory)
-      ?.label || selected.leaveCategory);
-  const selectedTypeLabel =
-    selected &&
-    (leaveTypeOptions.find((opt) => opt.value === selected.leaveType)?.label ||
-      selected.leaveType);
-  const selectedSubmittedAt =
-    selected && (selected.applicantSignedAt || selected.createdAt);
-  const selectedDurationText = selected ? buildDurationText(selected) : "Pending";
   const selectedTeamLeadStatus = selected?.teamLead?.status || "pending";
   const selectedTeamLeadLabel =
     teamLeadStatusLabels[selectedTeamLeadStatus] || teamLeadStatusLabels.pending;
-  const selectedTeamLeadTimestamp =
-    selectedTeamLeadStatus === "pending" ? null : selected?.teamLead?.reviewedAt;
-  const selectedTeamLeadRemarks = selected?.teamLead?.remarks || "No remarks yet.";
-  const selectedPeriodText = selected
-    ? `${selected.fromDate ? new Date(selected.fromDate).toLocaleDateString() : "N/A"} - ${
-        selected.toDate ? new Date(selected.toDate).toLocaleDateString() : "N/A"
-      }`
-    : "N/A - N/A";
   const selectedAvatarUrl =
     selected?.employeeSnapshot?.profileImageUrl ||
     selected?.employeeSnapshot?.signatureImageUrl ||
@@ -243,18 +227,11 @@ export default function LeaveApprovals() {
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase() || "")
       .join("") || "EMP";
-  const decisionStatusLabel =
-    leaveStatusOptions.find((option) => option.value === decision.status)?.label ||
-    (decision.status ? decision.status.replace(/_/g, " ") : "Pending");
 
   const refreshLeaves = React.useCallback(() => {
     const params = {};
-    if (statusFilter !== "all") {
-      params.status = statusFilter;
-    }
-    if (teamLeadFilter !== "all") {
-      params.teamLeadStatus = teamLeadFilter;
-    }
+    if (statusFilter !== "all") params.status = statusFilter;
+    if (teamLeadFilter !== "all") params.teamLeadStatus = teamLeadFilter;
     fetchLeaves(params).catch(() => {});
   }, [fetchLeaves, statusFilter, teamLeadFilter]);
 
@@ -274,15 +251,14 @@ export default function LeaveApprovals() {
       .catch((error) => {
         if (!active) return;
         const message =
-          error?.response?.data?.message || error?.message || "Failed to load HR team";
+          error?.response?.data?.message ||
+          error?.message ||
+          "Failed to load HR team";
         toast.error(message);
       })
       .finally(() => {
-        if (active) {
-          setHrLoading(false);
-        }
+        if (active) setHrLoading(false);
       });
-
     return () => {
       active = false;
     };
@@ -301,20 +277,15 @@ export default function LeaveApprovals() {
       setAllowanceInfo({ ...defaultAllowance });
       return;
     }
-
     const baseAllowance = buildAllowance(leave);
     setAllowanceInfo(baseAllowance);
 
     const userId = leave.user;
     const referenceDate = leave.fromDate || leave.createdAt;
-    if (!userId || !referenceDate) {
-      return;
-    }
+    if (!userId || !referenceDate) return;
 
     const parsed = new Date(referenceDate);
-    if (Number.isNaN(parsed.getTime())) {
-      return;
-    }
+    if (Number.isNaN(parsed.getTime())) return;
 
     const requestId = allowanceRequestIdRef.current + 1;
     allowanceRequestIdRef.current = requestId;
@@ -328,9 +299,7 @@ export default function LeaveApprovals() {
         },
       });
 
-      if (allowanceRequestIdRef.current !== requestId) {
-        return;
-      }
+      if (allowanceRequestIdRef.current !== requestId) return;
 
       const allowance = data?.allowance || {};
       const monthlyApproved = toNumberOrDefault(
@@ -341,10 +310,7 @@ export default function LeaveApprovals() {
         allowance.allowed,
         baseAllowance.allowed
       );
-      const yearlyUsed = toNumberOrDefault(
-        allowance.used,
-        baseAllowance.used
-      );
+      const yearlyUsed = toNumberOrDefault(allowance.used, baseAllowance.used);
       const remaining = toNumberOrDefault(
         allowance.remaining,
         Math.max(allowed - yearlyUsed, 0)
@@ -357,9 +323,7 @@ export default function LeaveApprovals() {
         monthlyUsed: monthlyApproved,
       });
     } catch (error) {
-      if (allowanceRequestIdRef.current !== requestId) {
-        return;
-      }
+      if (allowanceRequestIdRef.current !== requestId) return;
       const message =
         error?.response?.data?.message ||
         error?.message ||
@@ -371,10 +335,6 @@ export default function LeaveApprovals() {
 
   function openDetail(leave) {
     setSelected(leave);
-    setDecision({
-      status: leave.status || "pending",
-      remark: "",
-    });
     setHrDraft(buildHrDraft(leave));
     loadAllowanceDetails(leave);
     setDetailOpen(true);
@@ -385,7 +345,6 @@ export default function LeaveApprovals() {
     if (!nextOpen) {
       allowanceRequestIdRef.current += 1;
       setSelected(null);
-      setDecision({ status: "pending", remark: "" });
       setHrDraft(emptyHrDraft);
       setAllowanceInfo({ ...defaultAllowance });
     }
@@ -396,17 +355,6 @@ export default function LeaveApprovals() {
     try {
       const hrSection = buildHrPayload(hrDraft);
       await updateLeave(selected._id, { hrSection });
-
-      if (
-        decision.status !== selected.status ||
-        (decision.remark && decision.remark.trim().length > 0)
-      ) {
-        await updateLeaveStatus(selected._id, {
-          status: decision.status,
-          remark: decision.remark,
-        });
-      }
-
       handleDetailOpenChange(false);
       refreshLeaves();
     } catch {
@@ -482,26 +430,22 @@ export default function LeaveApprovals() {
           <tbody>
             {loading ? (
               <tr>
-                <td
-                  colSpan={9}
-                  className="px-4 py-6 text-center text-muted-foreground"
-                >
+                <td colSpan={9} className="px-4 py-6 text-center text-muted-foreground">
                   Loading leave requests...
                 </td>
               </tr>
             ) : leaves.length === 0 ? (
               <tr>
-                <td
-                  colSpan={9}
-                  className="px-4 py-6 text-center text-muted-foreground"
-                >
+                <td colSpan={9} className="px-4 py-6 text-center text-muted-foreground">
                   No leave requests found for this filter.
                 </td>
               </tr>
             ) : (
               leaves.map((leave) => {
                 const snapshot = leave.employeeSnapshot || {};
-                const range = `${leave.fromDate ? new Date(leave.fromDate).toLocaleDateString() : "N/A"} - ${
+                const range = `${
+                  leave.fromDate ? new Date(leave.fromDate).toLocaleDateString() : "N/A"
+                } - ${
                   leave.toDate ? new Date(leave.toDate).toLocaleDateString() : "N/A"
                 }`;
                 const submitted = leave.createdAt
@@ -518,25 +462,19 @@ export default function LeaveApprovals() {
                   "bg-slate-100 text-slate-700 border border-slate-200";
                 const teamLeadState = leave.teamLead?.status || "pending";
                 const teamLeadLabel =
-                  teamLeadStatusLabels[teamLeadState] ||
-                  teamLeadStatusLabels.pending;
+                  teamLeadStatusLabels[teamLeadState] || teamLeadStatusLabels.pending;
                 const teamLeadClass =
-                  teamLeadStatusTone[teamLeadState] ||
-                  teamLeadStatusTone.pending;
+                  teamLeadStatusTone[teamLeadState] || teamLeadStatusTone.pending;
 
                 const typeLabel =
-                  leaveTypeOptions.find((opt) => opt.value === leave.leaveType)
-                    ?.label || leave.leaveType;
+                  leaveTypeOptions.find((opt) => opt.value === leave.leaveType)?.label ||
+                  leave.leaveType;
                 const categoryLabel =
-                  leaveCategoryOptions.find(
-                    (opt) => opt.value === leave.leaveCategory
-                  )?.label || leave.leaveCategory;
+                  leaveCategoryOptions.find((opt) => opt.value === leave.leaveCategory)
+                    ?.label || leave.leaveCategory;
 
                 return (
-                  <tr
-                    key={leave._id || leave.id}
-                    className="border-t border-white/5"
-                  >
+                  <tr key={leave._id || leave.id} className="border-t border-white/5">
                     <td className="px-4 py-3">
                       <div className="font-medium text-foreground">
                         {snapshot.fullName || "N/A"}
@@ -548,23 +486,15 @@ export default function LeaveApprovals() {
                     <td className="px-4 py-3 text-muted-foreground">
                       <div>{snapshot.department || "N/A"}</div>
                       <div className="text-xs">
-                        {snapshot.branch
-                          ? `${snapshot.branch} · ${snapshot.city || ""}`
-                          : ""}
+                        {snapshot.branch ? `${snapshot.branch} · ${snapshot.city || ""}` : ""}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-sm font-medium text-foreground">
-                        {categoryLabel}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {typeLabel}
-                      </div>
+                      <div className="text-sm font-medium text-foreground">{categoryLabel}</div>
+                      <div className="text-xs text-muted-foreground">{typeLabel}</div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{range}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {duration || "Pending"}
-                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{duration || "Pending"}</td>
                     <td className="px-4 py-3">
                       <span
                         className={cn(
@@ -582,22 +512,12 @@ export default function LeaveApprovals() {
                           statusClass
                         )}
                       >
-                        {
-                          leaveStatusOptions.find(
-                            (opt) => opt.value === leave.status
-                          )?.label
-                        }
+                        {leaveStatusOptions.find((opt) => opt.value === leave.status)?.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {submitted}
-                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{submitted}</td>
                     <td className="px-4 py-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openDetail(leave)}
-                      >
+                      <Button size="sm" variant="outline" onClick={() => openDetail(leave)}>
                         Review
                       </Button>
                     </td>
@@ -618,9 +538,7 @@ export default function LeaveApprovals() {
             <div className="space-y-6">
               <section className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-input p-4">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Employee snapshot
-                  </h3>
+                  <h3 className="text-sm font-semibold text-foreground">Employee snapshot</h3>
                   <div className="mt-3 flex items-center gap-3">
                     <Avatar className="h-16 w-16 border border-muted">
                       {selectedAvatarSrc ? (
@@ -661,9 +579,7 @@ export default function LeaveApprovals() {
                 </div>
 
                 <div className="rounded-xl border border-input p-4">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Leave summary
-                  </h3>
+                  <h3 className="text-sm font-semibold text-foreground">Leave summary</h3>
                   <dl className="mt-3 space-y-2 text-sm text-muted-foreground">
                     <div>
                       <dt>Category · Type</dt>
@@ -675,9 +591,8 @@ export default function LeaveApprovals() {
                         }{" "}
                         ·{" "}
                         {
-                          leaveTypeOptions.find(
-                            (opt) => opt.value === selected.leaveType
-                          )?.label
+                          leaveTypeOptions.find((opt) => opt.value === selected.leaveType)
+                            ?.label
                         }
                       </dd>
                     </div>
@@ -697,12 +612,8 @@ export default function LeaveApprovals() {
                       <dt>Duration</dt>
                       <dd>
                         {[
-                          selected.durationDays
-                            ? `${selected.durationDays} day(s)`
-                            : null,
-                          selected.durationHours
-                            ? `${selected.durationHours} hour(s)`
-                            : null,
+                          selected.durationDays ? `${selected.durationDays} day(s)` : null,
+                          selected.durationHours ? `${selected.durationHours} hour(s)` : null,
                         ]
                           .filter(Boolean)
                           .join(" / ") || "Pending"}
@@ -713,58 +624,40 @@ export default function LeaveApprovals() {
               </section>
 
               <section className="rounded-xl border border-input p-4">
-                <h3 className="text-sm font-semibold text-foreground">
-                  Request details
-                </h3>
+                <h3 className="text-sm font-semibold text-foreground">Request details</h3>
                 <div className="mt-3 space-y-3 text-sm text-muted-foreground">
                   <div>
-                    <span className="font-medium text-foreground">
-                      Submitted:
-                    </span>{" "}
-                    {formatDateTimeDisplay(
-                      selected.applicantSignedAt || selected.createdAt
-                    )}
+                    <span className="font-medium text-foreground">Submitted:</span>{" "}
+                    {formatDateTimeDisplay(selected.applicantSignedAt || selected.createdAt)}
                   </div>
                   <div>
-                    <span className="font-medium text-foreground">
-                      Team lead decision:
-                    </span>{" "}
+                    <span className="font-medium text-foreground">Team lead decision:</span>{" "}
                     {teamLeadStatusLabels[selected.teamLead?.status || "pending"] ||
                       teamLeadStatusLabels.pending}
                   </div>
                   <div>
-                    <span className="font-medium text-foreground">
-                      Team lead action:
-                    </span>{" "}
+                    <span className="font-medium text-foreground">Team lead action:</span>{" "}
                     {selected.teamLead?.status === "pending"
                       ? "Pending"
                       : formatDateTimeDisplay(selected.teamLead?.reviewedAt)}
                   </div>
                   <div>
-                    <span className="font-medium text-foreground">
-                      Reason:
-                    </span>{" "}
+                    <span className="font-medium text-foreground">Reason:</span>{" "}
                     {selected.leaveReason || "N/A"}
                   </div>
                   <div>
-                    <span className="font-medium text-foreground">
-                      Team lead recommendation:
-                    </span>{" "}
+                    <span className="font-medium text-foreground">Team lead recommendation:</span>{" "}
                     {selected.teamLead?.remarks || "N/A"}
                   </div>
                   {selected.tasksDuringAbsence ? (
                     <div>
-                      <span className="font-medium text-foreground">
-                        Tasks during absence:
-                      </span>{" "}
+                      <span className="font-medium text-foreground">Tasks during absence:</span>{" "}
                       {selected.tasksDuringAbsence}
                     </div>
                   ) : null}
                   {selected.backupStaff?.name ? (
                     <div>
-                      <span className="font-medium text-foreground">
-                        Backup staff:
-                      </span>{" "}
+                      <span className="font-medium text-foreground">Backup staff:</span>{" "}
                       {selected.backupStaff?.name}
                     </div>
                   ) : null}
@@ -772,9 +665,7 @@ export default function LeaveApprovals() {
               </section>
 
               <section className="rounded-xl border border-input p-4 space-y-4">
-                <h3 className="text-sm font-semibold text-foreground">
-                  HR processing
-                </h3>
+                <h3 className="text-sm font-semibold text-foreground">HR processing</h3>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
@@ -802,9 +693,7 @@ export default function LeaveApprovals() {
                           {hrUsers.map((hr) => {
                             const id = String(hr._id || hr.id);
                             const labelParts = [hr.fullName];
-                            if (hr.employeeId) {
-                              labelParts.push(`#${hr.employeeId}`);
-                            }
+                            if (hr.employeeId) labelParts.push(`#${hr.employeeId}`);
                             return (
                               <SelectItem key={id} value={hr.fullName}>
                                 {labelParts.join(" ")}
@@ -949,33 +838,13 @@ export default function LeaveApprovals() {
 
               <section className="space-y-3">
                 <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select
-                    value={decision.status}
-                    onValueChange={(value) =>
-                      setDecision((prev) => ({ ...prev, status: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {leaveStatusOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
                   <Label>HR remarks</Label>
                   <textarea
-                    value={decision.remark}
+                    value={hrDraft.remarks}
                     onChange={(event) =>
-                      setDecision((prev) => ({
+                      setHrDraft((prev) => ({
                         ...prev,
-                        remark: event.target.value,
+                        remarks: event.target.value,
                       }))
                     }
                     placeholder="Capture supporting context or next steps"
@@ -986,18 +855,10 @@ export default function LeaveApprovals() {
             </div>
           )}
           <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => handleDetailOpenChange(false)}
-              type="button"
-            >
+            <Button variant="ghost" onClick={() => handleDetailOpenChange(false)} type="button">
               Close
             </Button>
-            <Button
-              onClick={submitDecision}
-              disabled={saving || !selected}
-              type="button"
-            >
+            <Button onClick={submitDecision} disabled={saving || !selected} type="button">
               {saving ? "Saving..." : "Save decision"}
             </Button>
           </DialogFooter>

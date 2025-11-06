@@ -65,23 +65,6 @@ export function useLeaves(defaultParams = {}) {
     [fetchLeaves]
   );
 
-  const updateLeaveStatus = React.useCallback(
-    async (id, { status, remark }) => {
-      setSaving(true);
-      try {
-        await api.patch(`/api/leaves/${id}/status`, { status, remark });
-        toast.success("Leave status updated");
-        await fetchLeaves();
-      } catch (error) {
-        toast.error(error.message || "Failed to update status");
-        throw error;
-      } finally {
-        setSaving(false);
-      }
-    },
-    [fetchLeaves]
-  );
-
   const updateLeave = React.useCallback(
     async (id, payload) => {
       setSaving(true);
@@ -107,7 +90,8 @@ export function useLeaves(defaultParams = {}) {
         toast.success("Team lead review saved");
         await fetchLeaves();
       } catch (error) {
-        const message = error?.response?.data?.message || error.message || "Failed to submit review";
+        const message =
+          error?.response?.data?.message || error.message || "Failed to submit review";
         toast.error(message);
         throw error;
       } finally {
@@ -123,7 +107,6 @@ export function useLeaves(defaultParams = {}) {
     saving,
     fetchLeaves,
     applyLeave,
-    updateLeaveStatus,
     updateLeave,
     updateLeaveAsTeamLead,
   };
