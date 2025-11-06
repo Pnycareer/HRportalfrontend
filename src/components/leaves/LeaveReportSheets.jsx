@@ -93,7 +93,7 @@ const toText = (v) => {
 /* ======= jsPDF layout constants & helpers ======= */
 const PADDING_X = 40;
 const PADDING_Y = 36;
-const GAP_Y = 10;
+const  GAP_Y = 10;
 const COL_GAP = 20;
 
 const setLabelFont = (doc) => { doc.setFont("helvetica", "bold"); doc.setFontSize(10); };
@@ -373,6 +373,36 @@ function buildAcceptedFormsPdf(acceptedEntries, user, allowance) {
   return doc;
 }
 
+/* ======= filename helpers (NEW) ======= */
+const slug = (s) =>
+  String(s || "employee")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const formatDateForFile = (value) => {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "unknown-date";
+  // 11-06-2025 style (MM-DD-YYYY) to keep it FS-safe
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${mm}-${dd}-${yyyy}`;
+};
+
+const singleFormFilename = (user, entry) => {
+  const name = slug(user?.fullName);
+  const start = formatDateForFile(entry?.fromDate);
+  return `${name}-${start}-leave-form.pdf`;
+};
+
+const multiFormFilename = (user, period) => {
+  const name = slug(user?.fullName);
+  const month = String(period?.month ?? "").padStart(2, "0");
+  const year = period?.year ?? "";
+  return `${name}-${month}-${year}-accepted-forms.pdf`;
+};
+
 /* ======= mini UI renderer for one accepted leave (used in web list) ======= */
 function LeaveFormView({ user, leave, index, annualAllowance }) {
   const allowanceInfo = annualAllowance || DEFAULT_ALLOWANCE;
@@ -433,9 +463,17 @@ export const MonthlyLeaveReport = React.forwardRef(function MonthlyLeaveReport(
     const idSet = new Set(selectedIds);
     const chosen = acceptedEntries.filter((e) => idSet.has(getEntryId(e)));
     if (chosen.length === 0) return;
+
+    // if user picked exactly one form => name: <employee>-<start>-leave-form.pdf
+    if (chosen.length === 1) {
+      const doc = buildAcceptedFormsPdf(chosen, data.user, allowance);
+      doc.save(singleFormFilename(data.user, chosen[0]));
+      return;
+    }
+
+    // else: keep a grouped name per month/year
     const doc = buildAcceptedFormsPdf(chosen, data.user, allowance);
-    const monthLabel = `${data.period?.month ?? ""}-${data.period?.year ?? ""}`;
-    doc.save(`${data.user?.employeeId || "employee"}-${monthLabel}-accepted-forms.pdf`);
+    doc.save(multiFormFilename(data.user, data.period));
   };
 
   return (
@@ -566,18 +604,38 @@ export const MonthlyLeaveReport = React.forwardRef(function MonthlyLeaveReport(
             })}
 
             {acceptedEntries.length > 0 && acceptedEntries.length <= 2 && (
-              <div className="flex justify-end">
+              <div className="flex flex-wrap gap-2 justify-end">
+                {/* Download all shown (<=2) as one doc — name falls back to month */}
                 <button
                   type="button"
                   onClick={() => {
                     const doc = buildAcceptedFormsPdf(acceptedEntries, data.user, allowance);
-                    const monthLabel = `${data.period?.month ?? ""}-${data.period?.year ?? ""}`;
-                    doc.save(`${data.user?.employeeId || "employee"}-${monthLabel}-accepted-forms.pdf`);
+                    doc.save(
+                      acceptedEntries.length === 1
+                        ? singleFormFilename(data.user, acceptedEntries[0])
+                        : multiFormFilename(data.user, data.period)
+                    );
                   }}
                   className="rounded-md border bg-black px-3 py-1 text-xs font-semibold text-white"
                 >
                   Download accepted forms (PDF)
                 </button>
+
+                {/* Optional: quick per-card single download buttons */}
+                {acceptedEntries.length === 2 &&
+                  acceptedEntries.map((entry) => (
+                    <button
+                      key={getEntryId(entry)}
+                      type="button"
+                      onClick={() => {
+                        const doc = buildAcceptedFormsPdf([entry], data.user, allowance);
+                        doc.save(singleFormFilename(data.user, entry));
+                      }}
+                      className="rounded-md border px-3 py-1 text-xs"
+                    >
+                      Download Form: {formatDate(entry.fromDate)}
+                    </button>
+                  ))}
               </div>
             )}
           </div>
