@@ -117,97 +117,61 @@ const toText = (v) => {
 /* ======= jsPDF layout constants & helpers ======= */
 const LAYOUT_PRESETS = [
   {
-    paddingX: 60,
-    paddingY: 64,
-    gapY: 18,
-    colGap: 34,
-    headerFontSize: 22,
-    labelFontSize: 11.6,
-    valueFontSize: 12.6,
-    smallFontSize: 10,
-    footnoteFontSize: 8,
-    lineHeight: 1.24,
-    labelSpacing: 5,
-    blockGap: 14,
-    panelPadding: 14,
-    panelRadius: 8,
-    typeBoxHeight: 42,
-    badgeHeight: 68,
-    minHeights: {
-      reason: 64,
-      tasks: 34,
-      backup: 28,
-      teamLead: 34,
-      decision: 34,
-      remarks: 60,
-    },
-    textColor: [28, 31, 36],
-    mutedColor: [118, 124, 133],
-    borderColor: [205, 210, 218],
-    fillColor: [248, 249, 251],
-    lineWidth: 0.65,
-  },
-  {
-    paddingX: 52,
-    paddingY: 58,
-    gapY: 16,
-    colGap: 30,
-    headerFontSize: 20,
-    labelFontSize: 11,
-    valueFontSize: 12,
-    smallFontSize: 9.5,
-    footnoteFontSize: 7.5,
-    lineHeight: 1.2,
-    labelSpacing: 4,
-    blockGap: 12,
-    panelPadding: 12,
-    panelRadius: 7,
-    typeBoxHeight: 38,
-    badgeHeight: 64,
-    minHeights: {
-      reason: 60,
-      tasks: 30,
-      backup: 26,
-      teamLead: 32,
-      decision: 32,
-      remarks: 56,
-    },
-    textColor: [34, 34, 36],
-    mutedColor: [124, 129, 136],
-    borderColor: [210, 214, 220],
-    fillColor: [249, 250, 252],
-    lineWidth: 0.6,
+    paddingX: 54,
+    paddingY: 56,
+    gapY: 12,
+    colGap: 26,
+    headerFontSize: 18,
+    labelFontSize: 9.6,
+    valueFontSize: 10.4,
+    smallFontSize: 8.6,
+    footnoteFontSize: 7,
+    lineHeight: 1.18,
+    labelSpacing: 3,
+    blockGap: 8,
+    summaryGap: 10,
+    textColor: [36, 38, 42],
+    mutedColor: [122, 126, 132],
+    ruleColor: [200, 204, 210],
+    ruleWidth: 0.45,
   },
   {
     paddingX: 48,
     paddingY: 52,
-    gapY: 14,
-    colGap: 26,
-    headerFontSize: 18,
-    labelFontSize: 10.5,
-    valueFontSize: 11.2,
-    smallFontSize: 9,
-    footnoteFontSize: 7,
+    gapY: 10,
+    colGap: 22,
+    headerFontSize: 16.5,
+    labelFontSize: 9,
+    valueFontSize: 9.8,
+    smallFontSize: 8.2,
+    footnoteFontSize: 6.6,
     lineHeight: 1.16,
-    labelSpacing: 4,
-    blockGap: 10,
-    panelPadding: 10,
-    panelRadius: 6,
-    typeBoxHeight: 34,
-    badgeHeight: 60,
-    minHeights: {
-      reason: 54,
-      tasks: 26,
-      backup: 22,
-      teamLead: 28,
-      decision: 28,
-      remarks: 50,
-    },
-    textColor: [42, 43, 46],
-    mutedColor: [128, 132, 139],
-    borderColor: [214, 217, 222],
-    fillColor: [252, 252, 253],
-    lineWidth: 0.55,
+    labelSpacing: 3,
+    blockGap: 7,
+    summaryGap: 8,
+    textColor: [40, 41, 44],
+    mutedColor: [128, 132, 138],
+    ruleColor: [205, 208, 214],
+    ruleWidth: 0.4,
+  },
+  {
+    paddingX: 44,
+    paddingY: 48,
+    gapY: 9,
+    colGap: 20,
+    headerFontSize: 15.5,
+    labelFontSize: 8.6,
+    valueFontSize: 9.2,
+    smallFontSize: 7.8,
+    footnoteFontSize: 6.3,
+    lineHeight: 1.14,
+    labelSpacing: 2.5,
+    blockGap: 6,
+    summaryGap: 7,
+    textColor: [44, 45, 48],
+    mutedColor: [132, 136, 140],
+    ruleColor: [210, 214, 219],
+    ruleWidth: 0.35,
   },
 ];
 
@@ -289,74 +253,81 @@ function drawTwoColFields(doc, y, colX, colW, leftPairs, rightPairs) {
   return Math.max(leftEnd, rightEnd);
 }
 
-function drawTextArea(
-  doc,
-  y,
-  x,
-  w,
-  label,
-  value,
-  minBoxH = ACTIVE_STYLE.minHeights.reason
-) {
+function drawTextArea(doc, y, x, w, label, value, minHeight = 0) {
   const pageH = doc.internal.pageSize.getHeight();
   const style = ACTIVE_STYLE;
-  const boxPadding = style.panelPadding;
   const labelHeight = style.labelFontSize * style.lineHeight;
   const safeValue = value && String(value).trim() ? value : "N/A";
 
   setValueFont(doc);
-  const { lines, height } = calcTextHeight(doc, safeValue, w - boxPadding * 2);
-  const contentH = Math.max(minBoxH - labelHeight - boxPadding * 2, height);
-  const needed = labelHeight + boxPadding * 2 + contentH;
+  const { lines, height } = calcTextHeight(doc, safeValue, w);
+  const contentH = Math.max(minHeight, height);
+  const needed = labelHeight + style.labelSpacing + contentH;
   y = ensureSpace(doc, y, needed, pageH);
 
   setLabelFont(doc);
   doc.setTextColor(...style.textColor);
   doc.text(toText(label), x, y);
 
-  const boxY = y + labelHeight;
-  doc.setDrawColor(...style.borderColor);
-  doc.setLineWidth(style.lineWidth);
-  doc.setFillColor(...style.fillColor);
-  doc.roundedRect(
-    x,
-    boxY,
-    w,
-    contentH + boxPadding * 2,
-    style.panelRadius,
-    style.panelRadius,
-    "FD"
-  );
-
+  const textY = y + labelHeight + style.labelSpacing;
   setValueFont(doc);
   doc.setTextColor(...style.textColor);
-  doc.text(lines, x + boxPadding, boxY + boxPadding + style.valueFontSize);
+  doc.text(lines, x, textY);
 
-  return boxY + contentH + boxPadding * 2 + style.gapY;
+  return textY + contentH + style.blockGap;
 }
 
-function drawBadgeBlock(doc, x, y, w, title, value) {
+function drawTwoColParagraphs(doc, y, colX, colW, leftEntry, rightEntry) {
   const style = ACTIVE_STYLE;
-  const blockH = style.badgeHeight;
-  doc.setDrawColor(...style.borderColor);
-  doc.setLineWidth(style.lineWidth);
-  doc.setFillColor(...style.fillColor);
-  doc.roundedRect(x, y, w, blockH, style.panelRadius, style.panelRadius, "FD");
+  const pageH = doc.internal.pageSize.getHeight();
+  const labelHeight = style.labelFontSize * style.lineHeight;
+  const textGap = style.labelSpacing;
+  const blockGap = style.blockGap;
+  const rightX = colX + colW + style.colGap;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(style.smallFontSize);
-  doc.setTextColor(...style.mutedColor);
-  doc.text(
-    toText(title).toUpperCase(),
-    x + style.panelPadding,
-    y + style.panelPadding + style.smallFontSize / 2
-  );
+  const prepareBlock = (entry) => {
+    if (!entry) return null;
+    const [label, rawValue] = entry;
+    const safeValue =
+      rawValue && String(rawValue).trim() ? rawValue : "N/A";
+    const { lines, height } = calcTextHeight(doc, safeValue, colW);
+    return { label: toText(label), lines, height };
+  };
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(style.valueFontSize + 4);
-  doc.setTextColor(...style.textColor);
-  const valueY = y + blockH - style.panelPadding;
-  doc.text(formatMetric(value), x + style.panelPadding, valueY);
+  setValueFont(doc);
+  const leftBlock = prepareBlock(leftEntry);
+  const rightBlock = prepareBlock(rightEntry);
+
+  const neededLeft = leftBlock
+    ? labelHeight + textGap + leftBlock.height
+    : 0;
+  const neededRight = rightBlock
+    ? labelHeight + textGap + rightBlock.height
+    : 0;
+  const needed = Math.max(neededLeft, neededRight);
+  if (!needed) return y;
+
+  y = ensureSpace(doc, y, needed, pageH);
+
+  if (leftBlock) {
+    setLabelFont(doc);
+    doc.setTextColor(...style.textColor);
+    doc.text(leftBlock.label, colX, y);
+    setValueFont(doc);
+    doc.setTextColor(...style.textColor);
+    doc.text(leftBlock.lines, colX, y + labelHeight + textGap);
+  }
+
+  if (rightBlock) {
+    setLabelFont(doc);
+    doc.setTextColor(...style.textColor);
+    doc.text(rightBlock.label, rightX, y);
+    setValueFont(doc);
+    doc.setTextColor(...style.textColor);
+    doc.text(rightBlock.lines, rightX, y + labelHeight + textGap);
+  }
+
+  return y + needed + blockGap;
 }
 
 function normalizeTypeLabel(map, raw) {
@@ -385,6 +356,11 @@ function drawAcceptedFormPage(
   const contentW = pageW - paddingX * 2;
   const colW = Math.floor((contentW - colGap) / 2);
   let y = paddingY;
+  const typeLabel = normalizeTypeLabel(LEAVE_TYPE_LABELS, leave?.leaveType);
+  const categoryLabel = normalizeTypeLabel(
+    LEAVE_CATEGORY_LABELS,
+    leave?.leaveCategory
+  );
 
   // Header
   doc.setTextColor(...style.textColor);
@@ -399,9 +375,9 @@ function drawAcceptedFormPage(
   const submittedW = doc.getTextWidth(submitted);
   doc.text(submitted, pageW - paddingX - submittedW, y);
 
-  y += style.smallFontSize + 6;
-  doc.setDrawColor(...style.borderColor);
-  doc.setLineWidth(style.lineWidth);
+  y += style.smallFontSize + 4;
+  doc.setDrawColor(...style.ruleColor);
+  doc.setLineWidth(style.ruleWidth);
   doc.line(paddingX, y, pageW - paddingX, y);
   y += gapY;
   doc.setTextColor(...style.textColor);
@@ -415,67 +391,28 @@ function drawAcceptedFormPage(
     [
       ["Employee Name", user?.fullName],
       ["Employee ID", user?.employeeId],
-      ["Designation", leave?.designation],
-      ["Contact", leave?.contactNumber],
+      ["Leave Type", typeLabel],
     ],
     [
       ["Department", user?.department],
       ["Branch", user?.branch],
-      [
-        "Leave Days",
-        `${formatDate(leave?.fromDate)} to ${formatDate(leave?.toDate)}`,
-      ],
-      ["No. of days/hours", formatDurationText(leave)],
+      ["Leave Category", categoryLabel],
     ]
   );
 
-  // Type / Category boxes
-  const typeLabel = normalizeTypeLabel(LEAVE_TYPE_LABELS, leave?.leaveType);
-  const catLabel = normalizeTypeLabel(
-    LEAVE_CATEGORY_LABELS,
-    leave?.leaveCategory
-  );
-
-  setLabelFont(doc);
-  doc.setTextColor(...style.textColor);
-  y = ensureSpace(doc, y, 18, pageH);
-  doc.text("Leave Type", paddingX, y);
-  doc.text("Leave Category", paddingX + colW + colGap, y);
-
-  const boxTop = y + 6;
-  const boxHeight = style.typeBoxHeight;
-  const typePadding = style.panelPadding;
-  y = ensureSpace(doc, boxTop, boxHeight, pageH);
-
-  doc.setDrawColor(...style.borderColor);
-  doc.setFillColor(...style.fillColor);
-  doc.setLineWidth(style.lineWidth);
-  doc.roundedRect(
+  y = drawTwoColFields(
+    doc,
+    y,
     paddingX,
-    boxTop,
     colW,
-    boxHeight,
-    style.panelRadius,
-    style.panelRadius,
-    "FD"
+    [
+      [
+        "Leave Period",
+        `${formatDate(leave?.fromDate)} to ${formatDate(leave?.toDate)}`,
+      ],
+    ],
+    [["Duration", formatDurationText(leave)]]
   );
-  doc.roundedRect(
-    paddingX + colW + colGap,
-    boxTop,
-    colW,
-    boxHeight,
-    style.panelRadius,
-    style.panelRadius,
-    "FD"
-  );
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(style.valueFontSize + 1);
-  doc.setTextColor(...style.textColor);
-  const labelY = boxTop + boxHeight / 2 + style.valueFontSize / 2;
-  doc.text(toText(typeLabel), paddingX + typePadding, labelY);
-  doc.text(toText(catLabel), paddingX + colW + colGap + typePadding, labelY);
-  y = boxTop + boxHeight + gapY;
 
   // Reason (full width)
   y = drawTextArea(
@@ -484,142 +421,28 @@ function drawAcceptedFormPage(
     paddingX,
     contentW,
     "Leave Application",
-    leave?.reason,
-    style.minHeights.reason
+    leave?.reason
   );
 
-  // Tasks + Backup aligned row
-  const tasksW = colW;
-  const backupW = colW;
-  y = ensureSpace(doc, y, 18, pageH);
-  setLabelFont(doc);
-  doc.setTextColor(...style.textColor);
-  doc.text("Tasks During Absence", paddingX, y);
-  setLabelFont(doc);
-  doc.setTextColor(...style.textColor);
-  doc.text("Back-up Staff Name", paddingX + colW + colGap, y);
-
-  const rowTop = y + 6;
-  const panelPadding = style.panelPadding;
-  setValueFont(doc);
-  doc.setTextColor(...style.textColor);
-  const { lines: taskLines, height: taskH } = calcTextHeight(
+  // Tasks + Backup narratives
+  y = drawTwoColParagraphs(
     doc,
-    leave?.tasksDuringAbsence || "N/A",
-    tasksW - panelPadding * 2
-  );
-  const { lines: backLines, height: backH } = calcTextHeight(
-    doc,
-    leave?.backupStaff?.name || "N/A",
-    backupW - panelPadding * 2
-  );
-  const rowContentH = Math.max(
-    Math.max(taskH, style.minHeights.tasks),
-    Math.max(backH, style.minHeights.backup)
-  );
-  const rowBoxH = rowContentH + panelPadding * 2;
-
-  y = ensureSpace(doc, rowTop, rowBoxH, pageH);
-
-  doc.setDrawColor(...style.borderColor);
-  doc.setFillColor(...style.fillColor);
-  doc.setLineWidth(style.lineWidth);
-  doc.roundedRect(
+    y,
     paddingX,
-    rowTop,
-    tasksW,
-    rowBoxH,
-    style.panelRadius,
-    style.panelRadius,
-    "FD"
+    colW,
+    ["Tasks During Absence", leave?.tasksDuringAbsence],
+    ["Back-up Staff Name", leave?.backupStaff?.name]
   );
-  doc.roundedRect(
-    paddingX + colW + colGap,
-    rowTop,
-    backupW,
-    rowBoxH,
-    style.panelRadius,
-    style.panelRadius,
-    "FD"
-  );
-
-  doc.text(
-    taskLines,
-    paddingX + panelPadding,
-    rowTop + panelPadding + style.valueFontSize
-  );
-  doc.text(
-    backLines,
-    paddingX + colW + colGap + panelPadding,
-    rowTop + panelPadding + style.valueFontSize
-  );
-
-  y = rowTop + rowBoxH + gapY;
 
   // Team lead row
-  y = ensureSpace(doc, y, 18, pageH);
-  setLabelFont(doc);
-  doc.setTextColor(...style.textColor);
-  doc.text("Team Lead Remarks", paddingX, y);
-  setLabelFont(doc);
-  doc.setTextColor(...style.textColor);
-  doc.text("Team Lead Decision", paddingX + colW + colGap, y);
-
-  const leaderRowTop = y + 6;
-  const leaderPadding = Math.max(style.panelPadding - 2, 10);
-  setValueFont(doc);
-  doc.setTextColor(...style.textColor);
-  const { lines: tlLines, height: tlH } = calcTextHeight(
+  y = drawTwoColParagraphs(
     doc,
-    leave?.teamLead?.remarks || "N/A",
-    colW - leaderPadding * 2
-  );
-  const decisionText = formatTeamLeadStatus(leave?.teamLead?.status);
-  const { lines: decLines, height: decH } = calcTextHeight(
-    doc,
-    decisionText,
-    colW - leaderPadding * 2
-  );
-  const leaderContentH = Math.max(
-    Math.max(tlH, style.minHeights.teamLead),
-    Math.max(decH, style.minHeights.decision)
-  );
-  const leaderBoxH = leaderContentH + leaderPadding * 2;
-
-  y = ensureSpace(doc, leaderRowTop, leaderBoxH, pageH);
-  doc.setDrawColor(...style.borderColor);
-  doc.setFillColor(...style.fillColor);
-  doc.setLineWidth(style.lineWidth);
-  doc.roundedRect(
+    y,
     paddingX,
-    leaderRowTop,
     colW,
-    leaderBoxH,
-    style.panelRadius,
-    style.panelRadius,
-    "FD"
+    ["Team Lead Remarks", leave?.teamLead?.remarks],
+    ["Team Lead Decision", formatTeamLeadStatus(leave?.teamLead?.status)]
   );
-  doc.roundedRect(
-    paddingX + colW + colGap,
-    leaderRowTop,
-    colW,
-    leaderBoxH,
-    style.panelRadius,
-    style.panelRadius,
-    "FD"
-  );
-
-  doc.text(
-    tlLines,
-    paddingX + leaderPadding,
-    leaderRowTop + leaderPadding + style.valueFontSize
-  );
-  doc.text(
-    decLines,
-    paddingX + colW + colGap + leaderPadding,
-    leaderRowTop + leaderPadding + style.valueFontSize
-  );
-  y = leaderRowTop + leaderBoxH + gapY;
 
   // Timestamps (two col)
   y = drawTwoColFields(
@@ -644,13 +467,14 @@ function drawAcceptedFormPage(
   );
 
   // HR section
-  y = ensureSpace(doc, y, 24, pageH);
+  const labelHeight = style.labelFontSize * style.lineHeight;
+  y = ensureSpace(doc, y, labelHeight + gapY, pageH);
   setLabelFont(doc);
   doc.setTextColor(...style.textColor);
   doc.text("HR Office Use Only", paddingX, y);
-  y += 8;
-  doc.setDrawColor(...style.borderColor);
-  doc.setLineWidth(style.lineWidth);
+  y += labelHeight;
+  doc.setDrawColor(...style.ruleColor);
+  doc.setLineWidth(style.ruleWidth);
   doc.line(paddingX, y, pageW - paddingX, y);
   y += gapY;
 
@@ -679,42 +503,39 @@ function drawAcceptedFormPage(
     paddingX,
     contentW,
     "HR Remarks",
-    hrRemarks,
-    style.minHeights.remarks
+    hrRemarks
   );
 
-  // Summary cards
+  // Summary
   const allowanceInfo =
     leave?.hrSection?.annualAllowance || annualAllowance || DEFAULT_ALLOWANCE;
-  const cardW = Math.floor((contentW - colGap * 2) / 3);
-  const cardsH = style.badgeHeight;
+  const summarySegments = [
+    `Annual allowance: ${formatMetric(allowanceInfo.allowed)}`,
+    `Approved days: ${formatMetric(toDurationValue(leave))}`,
+    `Remaining balance: ${formatMetric(allowanceInfo.remaining)}`,
+  ];
+  const summaryText = summarySegments.map((segment) => `- ${segment}`).join("\n");
 
-  y = ensureSpace(doc, y, cardsH, pageH);
-  drawBadgeBlock(
+  setValueFont(doc);
+  const { lines: summaryLines, height: summaryHeight } = calcTextHeight(
     doc,
-    paddingX,
-    y,
-    cardW,
-    "Annual allowance",
-    allowanceInfo.allowed
+    summaryText,
+    contentW
   );
-  drawBadgeBlock(
-    doc,
-    paddingX + cardW + colGap,
-    y,
-    cardW,
-    "Approved days",
-    toDurationValue(leave)
-  );
-  drawBadgeBlock(
-    doc,
-    paddingX + (cardW + colGap) * 2,
-    y,
-    cardW,
-    "Remaining balance",
-    allowanceInfo.remaining
-  );
-  y += cardsH + gapY;
+  const summaryNeeded =
+    labelHeight + style.labelSpacing + summaryHeight;
+  y = ensureSpace(doc, y, summaryNeeded, pageH);
+
+  setLabelFont(doc);
+  doc.setTextColor(...style.textColor);
+  doc.text("Summary", paddingX, y);
+
+  const summaryY = y + labelHeight + style.labelSpacing;
+  setValueFont(doc);
+  doc.setTextColor(...style.textColor);
+  doc.text(summaryLines, paddingX, summaryY);
+
+  y = summaryY + summaryHeight + style.summaryGap;
 
   // Footer
   doc.setFont("helvetica", "normal");
