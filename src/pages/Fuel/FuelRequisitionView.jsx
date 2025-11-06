@@ -1,4 +1,3 @@
-// src/components/FuelRequisitionView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/axios";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,12 +34,17 @@ export default function FuelRequisitionView({
   const [loading, setLoading] = useState(!data);
   const [error, setError] = useState("");
 
-  // edit state
+  // edit state (header)
   const [isEditing, setIsEditing] = useState(false);
   const [editModel, setEditModel] = useState({ month: "", year: "", status: "", remarks: "" });
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [removingSrNo, setRemovingSrNo] = useState(null);
+
+  // inline row-edit state (KM)
+  const [editingSrNo, setEditingSrNo] = useState(null);
+  const [lineEdit, setLineEdit] = useState({ km: "" });
+  const [savingSrNo, setSavingSrNo] = useState(null);
 
   useEffect(() => {
     if (data) {
@@ -90,7 +94,7 @@ export default function FuelRequisitionView({
     return { km, amount, verifiedKm, verifiedAmount };
   }, [doc]);
 
-  // ----- edit / delete handlers -----
+  // ----- header edit / delete handlers -----
   const beginEdit = () => {
     if (!doc) return;
     setEditModel({
@@ -136,7 +140,6 @@ export default function FuelRequisitionView({
       await api.delete(`/api/fuel-requisitions/${doc._id}`);
       toast.success("Requisition removed.");
       onDeleted?.(doc._id);
-      // if this is a single view, just blank it out
       setDoc(null);
     } catch (e) {
       toast.error("Failed to delete requisition", {
@@ -165,6 +168,34 @@ export default function FuelRequisitionView({
     }
   };
 
+  // ----- inline KM edit handlers (admin) -----
+  const startEditKm = (srNo, currentKm) => {
+    setEditingSrNo(srNo);
+    setLineEdit({ km: String(currentKm ?? 0) });
+  };
+
+  const cancelEditKm = () => {
+    setEditingSrNo(null);
+    setLineEdit({ km: "" });
+  };
+
+  const saveEditKm = async (srNo) => {
+    if (!doc?._id) return;
+    try {
+      setSavingSrNo(srNo);
+      const payload = { km: Number(lineEdit.km) || 0 };
+      const res = await api.patch(`/api/fuel-requisitions/${doc._id}/items/${srNo}`, payload);
+      setDoc(res.data);
+      setEditingSrNo(null);
+      toast.success(`KM updated for line #${srNo}.`);
+      onUpdated?.(res.data);
+    } catch (e) {
+      toast.error("Failed to update KM", { description: e.message || "Could not update." });
+    } finally {
+      setSavingSrNo(null);
+    }
+  };
+
   // ----- render -----
   if (loading) return <div className="text-sm text-muted-foreground">loading requisition…</div>;
   if (error) return <div className="text-sm text-red-600">{error}</div>;
@@ -175,7 +206,7 @@ export default function FuelRequisitionView({
   const items = doc.items || [];
   const verifiedCount = items.filter((it) => it.verified).length;
 
-  const showOwnerActions = !adminMode; // employees edit their own; backend enforces auth anyway
+  const showOwnerActions = !adminMode;
 
   return (
     <Card className="mt-8 print:shadow-none">
@@ -210,7 +241,7 @@ export default function FuelRequisitionView({
           </div>
         ) : null}
 
-        {/* Inline editor */}
+        {/* Inline header editor */}
         {isEditing ? (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3 rounded-md border p-3">
             <div className="space-y-1">
@@ -277,7 +308,10 @@ export default function FuelRequisitionView({
                 <TableHead className="w-24 text-right font-semibold">Rate</TableHead>
                 <TableHead className="w-28 text-right font-semibold">Amount</TableHead>
                 {adminMode ? (
-                  <TableHead className="w-32 text-right font-semibold">Verification</TableHead>
+                  <>
+                    <TableHead className="w-32 text-right font-semibold">Verification</TableHead>
+                    <TableHead className="w-32 text-right font-semibold">Actions</TableHead>
+                  </>
                 ) : (
                   <TableHead className="w-28 text-right font-semibold">Actions</TableHead>
                 )}
@@ -292,6 +326,7 @@ export default function FuelRequisitionView({
                 const srNo = r.srNo ?? i + 1;
                 const isVerified = Boolean(r.verified);
                 const toggleDisabled = verifyingSrNo === srNo;
+                const isRowEditing = editingSrNo === srNo;
 
                 return (
                   <TableRow key={`${srNo}-${i}`} className={isVerified ? "bg-green-100/35" : "bg-amber-100/20"}>
@@ -304,21 +339,69 @@ export default function FuelRequisitionView({
                       ) : null}
                       {r.description}
                     </TableCell>
-                    <TableCell className="text-right">{km}</TableCell>
+
+                    {/* KM cell */}
+                    <TableCell className="text-right">
+                      {adminMode && isRowEditing ? (
+                        <div className="flex justify-end">
+                          <Input
+                            type="number"
+                            className="h-8 w-24"
+                            value={lineEdit.km}
+                            onChange={(e) => setLineEdit((m) => ({ ...m, km: e.target.value }))}
+                          />
+                        </div>
+                      ) : (
+                        km
+                      )}
+                    </TableCell>
+
                     <TableCell className="text-right">{rate}</TableCell>
                     <TableCell className="text-right">{amount}</TableCell>
 
                     {adminMode ? (
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant={isVerified ? "secondary" : "outline"}
-                          onClick={() => onToggleVerification?.(srNo, !isVerified)}
-                          disabled={toggleDisabled}
-                        >
-                          {toggleDisabled ? "Saving..." : isVerified ? "Unverify" : "Verify"}
-                        </Button>
-                      </TableCell>
+                      <>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant={isVerified ? "secondary" : "outline"}
+                            onClick={() => onToggleVerification?.(srNo, !isVerified)}
+                            disabled={toggleDisabled || isRowEditing}
+                          >
+                            {toggleDisabled ? "Saving..." : isVerified ? "Unverify" : "Verify"}
+                          </Button>
+                        </TableCell>
+
+                        <TableCell className="text-right">
+                          {!isRowEditing ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => startEditKm(srNo, km)}
+                            >
+                              Edit KM
+                            </Button>
+                          ) : (
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                size="sm"
+                                onClick={() => saveEditKm(srNo)}
+                                disabled={savingSrNo === srNo}
+                              >
+                                {savingSrNo === srNo ? "Saving…" : "Save"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={cancelEditKm}
+                                disabled={savingSrNo === srNo}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </>
                     ) : (
                       <TableCell className="text-right">
                         <Button
@@ -348,7 +431,7 @@ export default function FuelRequisitionView({
                 <TableCell className="text-right font-semibold">
                   {adminMode ? totals.verifiedAmount : totals.amount}
                 </TableCell>
-                <TableCell className="text-right text-xs text-muted-foreground font-medium">
+                <TableCell className="text-right text-xs text-muted-foreground font-medium" colSpan={adminMode ? 2 : 1}>
                   {adminMode ? `${verifiedCount}/${items.length} verified` : ""}
                 </TableCell>
               </TableRow>
