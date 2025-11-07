@@ -169,7 +169,7 @@ export default function Sidebar() {
         <div className="flex items-center gap-3 px-3.5 pb-4 pt-4">
           <div className="relative">
             <img
-              // src={avatarSrc}
+              src={avatarSrc}
               alt="User Avatar"
               className="h-10 w-10 rounded-full object-cover ring-2 ring-white/80 shadow-md shadow-sky-100/50"
             />
