@@ -13,21 +13,19 @@ export default function AdminInstructorOvertime() {
     saving,
     fetchClaims,
     updateClaim,
-    fetchMonthlyReport, // ✅ new method
+    fetchMonthlyReport,
   } = useInstructorOvertime();
 
   // filters: month (YYYY-MM) + instructor
   const [filters, setFilters] = React.useState({ month: "", instructorId: "" });
 
-  // optional: initial fetch; you can remove if you prefer a blank screen before Apply
-  React.useEffect(() => {
-    fetchClaims().catch(() => {});
-  }, [fetchClaims]);
+  // keep a stable, "all employees" list that DOESN'T get nuked by filtering
+  const [instructorOptions, setInstructorOptions] = React.useState([]);
 
-  // instructor dropdown options
-  const instructorOptions = React.useMemo(() => {
+  // -------- utils --------
+  const buildInstructorOptions = React.useCallback((rows = []) => {
     const map = new Map();
-    for (const c of claims || []) {
+    for (const c of rows) {
       const id =
         c.instructorId ||
         c.instructor?._id ||
@@ -37,39 +35,64 @@ export default function AdminInstructorOvertime() {
       if (id && !map.has(id)) map.set(id, name);
     }
     return Array.from(map, ([value, label]) => ({ value, label }));
-  }, [claims]);
+  }, []);
 
-  const handleFilterChange = (field) => (e) => {
-    const value = e?.target ? e.target.value : e;
-    setFilters((prev) => ({ ...prev, [field]: value }));
-  };
+  const loadAllClaims = React.useCallback(async () => {
+    const data = await fetchClaims({});
+    // only update dropdown from the UNFILTERED payload
+    setInstructorOptions(buildInstructorOptions(Array.isArray(data) ? data : []));
+  }, [fetchClaims, buildInstructorOptions]);
 
-  const applyFilters = async () => {
-    const { instructorId, month } = filters;
-    if (!instructorId || !month) return;
+  // initial fetch for table + dropdown
+  React.useEffect(() => {
+    loadAllClaims().catch(() => {});
+  }, [loadAllClaims]);
 
-    // month is "YYYY-MM" → parse to year & 1-based month
-    const [yyyy, mm] = month.split("-");
+  const parseMonth = React.useCallback((monthStr) => {
+    if (!monthStr) return null;
+    const [yyyy, mm] = monthStr.split("-");
     const year = Number(yyyy);
-    const monthNum = Number(mm); // already 1-12
-
+    const monthNum = Number(mm);
     if (
       !Number.isInteger(year) ||
       !Number.isInteger(monthNum) ||
       monthNum < 1 ||
       monthNum > 12
-    )
-      return;
+    ) {
+      return null;
+    }
+    return { year, month: monthNum };
+  }, []);
 
+  const applyFilters = React.useCallback(async () => {
+    const { instructorId, month } = filters;
+    if (!instructorId || !month) return;
+    const parsed = parseMonth(month);
+    if (!parsed) return;
     try {
-      await fetchMonthlyReport({ year, month: monthNum, instructorId });
+      await fetchMonthlyReport({ ...parsed, instructorId });
     } catch {}
+  }, [filters, parseMonth, fetchMonthlyReport]);
+
+  const handleFilterChange = (field) => (e) => {
+    const value = e?.target ? e.target.value : e;
+    setFilters((prev) => {
+      const next = { ...prev, [field]: value };
+      // auto-apply when both fields are present
+      const hasInstructor = !!next.instructorId;
+      const hasMonth = !!next.month;
+      if ((field === "instructorId" || field === "month") && hasInstructor && hasMonth) {
+        // fire-and-forget; UI already shows spinners via `loading`
+        applyFilters();
+      }
+      return next;
+    });
   };
 
   const resetFilters = async () => {
     setFilters({ month: "", instructorId: "" });
-    // optional: clear table or show all again
-    // await fetchClaims({});  // <- uncomment if you want "all claims" after reset
+    // if you want table to show all claims again on reset, uncomment:
+    // await loadAllClaims();
   };
 
   const totalPayoutForSelection = React.useMemo(() => {
@@ -79,9 +102,17 @@ export default function AdminInstructorOvertime() {
     }, 0);
   }, [claims]);
 
+  // IMPORTANT: don't let hook auto-refresh to "all". We control refresh here.
   const setVerified = async (id, next) => {
     try {
       await updateClaim(id, { verified: !!next });
+      // re-run the *same* view user is on
+      if (filters.instructorId && filters.month) {
+        await applyFilters();
+      } else {
+        const data = await fetchClaims({});
+        setInstructorOptions(buildInstructorOptions(Array.isArray(data) ? data : []));
+      }
     } catch {}
   };
 
@@ -103,9 +134,9 @@ export default function AdminInstructorOvertime() {
         instructorOptions={instructorOptions}
         loading={loading}
         onChange={handleFilterChange}
-        onApply={applyFilters}
+        onApply={applyFilters}     // still there, but now optional
         onReset={resetFilters}
-        onRefresh={() => fetchClaims()}
+        onRefresh={loadAllClaims}  // makes sure dropdown stays full
       />
 
       <PayoutSummary show={canShowSummary} total={totalPayoutForSelection} />

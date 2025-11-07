@@ -40,7 +40,6 @@ export function useInstructorOvertime(defaultParams = {}) {
               year,
               month, // 1-12
               instructorId, // required for claims list
-              // optional:
               branchName,
               verified, // "true" | "false"
             },
@@ -49,7 +48,7 @@ export function useInstructorOvertime(defaultParams = {}) {
 
         const selected = data?.selectedInstructor;
         const rows = Array.isArray(selected?.claims) ? selected.claims : [];
-        setClaims(rows); // reuse the same claims table state
+        setClaims(rows);
         return data;
       } catch (error) {
         toast.error(
@@ -69,9 +68,10 @@ export function useInstructorOvertime(defaultParams = {}) {
     async (payload) => {
       setSaving(true);
       try {
-        await api.post("/api/instructor-overtime", payload);
+        const { data } = await api.post("/api/instructor-overtime", payload);
         toast.success("Overtime claim submitted for review");
-        await fetchClaims();
+        // no auto-refetch here — caller decides what to refresh
+        return data;
       } catch (error) {
         toast.error(
           error?.response?.data?.message ||
@@ -83,16 +83,17 @@ export function useInstructorOvertime(defaultParams = {}) {
         setSaving(false);
       }
     },
-    [fetchClaims]
+    []
   );
 
   const updateClaim = React.useCallback(
     async (id, payload) => {
       setSaving(true);
       try {
-        await api.patch(`/api/instructor-overtime/${id}`, payload);
+        const { data } = await api.patch(`/api/instructor-overtime/${id}`, payload);
         toast.success("Overtime claim updated");
-        await fetchClaims();
+        // no auto-refetch — caller will re-run either monthly or all
+        return data;
       } catch (error) {
         toast.error(
           error?.response?.data?.message ||
@@ -104,13 +105,11 @@ export function useInstructorOvertime(defaultParams = {}) {
         setSaving(false);
       }
     },
-    [fetchClaims]
+    []
   );
 
   const deleteClaim = React.useCallback(
     async (id) => {
-      // quick confirm — don’t overcomplicate
-      // if you have a nicer confirm component, swap this.
       const ok =
         typeof window !== "undefined"
           ? window.confirm("Delete this overtime claim? This cannot be undone.")
@@ -118,9 +117,10 @@ export function useInstructorOvertime(defaultParams = {}) {
       if (!ok) return;
       setSaving(true);
       try {
-        await api.delete(`/api/instructor-overtime/${id}`);
+        const { data } = await api.delete(`/api/instructor-overtime/${id}`);
         toast.success("Overtime claim deleted");
-        await fetchClaims();
+        // no auto-refetch — caller decides
+        return data;
       } catch (error) {
         toast.error(
           error?.response?.data?.message ||
@@ -132,7 +132,7 @@ export function useInstructorOvertime(defaultParams = {}) {
         setSaving(false);
       }
     },
-    [fetchClaims]
+    []
   );
 
   return {
@@ -140,7 +140,7 @@ export function useInstructorOvertime(defaultParams = {}) {
     loading,
     saving,
     fetchClaims,
-    fetchMonthlyReport, 
+    fetchMonthlyReport,
     createClaim,
     updateClaim,
     deleteClaim,

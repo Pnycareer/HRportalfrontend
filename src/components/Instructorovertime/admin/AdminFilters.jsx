@@ -47,7 +47,7 @@ export default function AdminFilters({
 
         <div className="flex items-center gap-3 pb-1">
           <Button type="button" onClick={onApply} disabled={!canApply || loading}>
-            Apply
+            Apply  (optional)
           </Button>
           <Button type="button" variant="outline" onClick={onReset} disabled={loading}>
             Reset
