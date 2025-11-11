@@ -118,6 +118,7 @@ export default function UserProfilePdfButton({
       ["Absent", summary?.totals?.absent ?? 0],
       ["Leave", summary?.totals?.leave ?? 0],
       ["Official Off", summary?.totals?.official_off ?? 0],
+      ["Public Holiday", summary?.totals?.public_holiday ?? 0],
       ["Short Leave", summary?.totals?.short_leave ?? 0],
       ["Worked Hours", (summary?.workedHours ?? 0).toFixed(2)],
       ["Average Hours", (summary?.avgHours ?? 0).toFixed(2)],

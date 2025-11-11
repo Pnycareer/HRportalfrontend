@@ -211,7 +211,7 @@ export default function Sidebar() {
           </motion.button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 pb-6 pt-2">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-6 pt-2">
           {filteredGroups.map((group) => (
             <div key={group.label} className="mb-6">
               {!collapsed && (

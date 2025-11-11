@@ -16,7 +16,7 @@ export const LABELS = {
   official_off: "Official Off",
   short_leave: "Short Leave",
   half_day: "Half Day",
-  public_holiday: "public_holiday",
+  public_holiday: "Public Holiday",
 };
 
 export const ORDER = [
@@ -25,6 +25,7 @@ export const ORDER = [
   "leave",
   "late",
   "official_off",
+  "public_holiday",
   "short_leave",
   "half_day",
 ];

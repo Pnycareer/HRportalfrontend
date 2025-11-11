@@ -149,7 +149,7 @@ export default function AdminLayout() {
       {/* content */}
       <div className={`relative transition-[padding] duration-300 ease-out ${desktopPaddingClass}`}>
         <main className="admin-main-shell relative mx-auto max-w-7xl px-4 pb-10 pt-8 sm:px-6 lg:px-10">
-          <motion.div
+          {/* <motion.div
             className="mx-auto mb-6 w-full max-w-5xl rounded-2xl border border-white/60 bg-white/80 p-5 shadow-xl shadow-sky-100/40 backdrop-blur-md"
             initial={{ opacity: 0, y: -18 }}
             animate={{ opacity: 1, y: 0 }}
@@ -169,7 +169,7 @@ export default function AdminLayout() {
                 Systems running optimally
               </div>
             </div>
-          </motion.div>
+          </motion.div> */}
 
           {/* Suspense shows loader while lazy chunks download */}
           <React.Suspense fallback={<LoaderOverlay show={true} />}>
