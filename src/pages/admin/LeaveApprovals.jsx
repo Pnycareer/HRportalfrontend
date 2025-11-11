@@ -206,6 +206,7 @@ export default function LeaveApprovals() {
   const [detailOpen, setDetailOpen] = React.useState(false);
   const [selected, setSelected] = React.useState(null);
   const [hrDraft, setHrDraft] = React.useState(emptyHrDraft);
+  const [statusDraft, setStatusDraft] = React.useState("pending");
   const [allowanceInfo, setAllowanceInfo] = React.useState(defaultAllowance);
   const [hrUsers, setHrUsers] = React.useState([]);
   const [hrLoading, setHrLoading] = React.useState(false);
@@ -214,6 +215,15 @@ export default function LeaveApprovals() {
   const selectedTeamLeadStatus = selected?.teamLead?.status || "pending";
   const selectedTeamLeadLabel =
     teamLeadStatusLabels[selectedTeamLeadStatus] || teamLeadStatusLabels.pending;
+  const resolvedLeaveStatus = selected?.status || "pending";
+  const resolvedLeaveStatusLabel =
+    leaveStatusOptions.find((option) => option.value === resolvedLeaveStatus)?.label ||
+    "Pending";
+  const resolvedLeaveStatusTone =
+    statusTone[resolvedLeaveStatus] ||
+    "bg-slate-100 text-slate-700 border border-slate-200";
+  const statusDraftLabel =
+    leaveStatusOptions.find((option) => option.value === statusDraft)?.label || "Pending";
   const selectedAvatarUrl =
     selected?.employeeSnapshot?.profileImageUrl ||
     selected?.employeeSnapshot?.signatureImageUrl ||
@@ -336,6 +346,7 @@ export default function LeaveApprovals() {
   function openDetail(leave) {
     setSelected(leave);
     setHrDraft(buildHrDraft(leave));
+    setStatusDraft(leave?.status || "pending");
     loadAllowanceDetails(leave);
     setDetailOpen(true);
   }
@@ -346,6 +357,7 @@ export default function LeaveApprovals() {
       allowanceRequestIdRef.current += 1;
       setSelected(null);
       setHrDraft(emptyHrDraft);
+      setStatusDraft("pending");
       setAllowanceInfo({ ...defaultAllowance });
     }
   }
@@ -354,7 +366,11 @@ export default function LeaveApprovals() {
     if (!selected?._id) return;
     try {
       const hrSection = buildHrPayload(hrDraft);
-      await updateLeave(selected._id, { hrSection });
+      const payload = { hrSection };
+      if (statusDraft) {
+        payload.status = statusDraft;
+      }
+      await updateLeave(selected._id, payload);
       handleDetailOpenChange(false);
       refreshLeaves();
     } catch {
@@ -661,6 +677,55 @@ export default function LeaveApprovals() {
                       {selected.backupStaff?.name}
                     </div>
                   ) : null}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-input p-4 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">HR approved leave</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Record the final HR decision and keep the employee in the loop.
+                  </p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Decision status</Label>
+                    <Select value={statusDraft} onValueChange={setStatusDraft}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {leaveStatusOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {statusDraft === "pending"
+                        ? "Keep the request pending until you're ready to approve."
+                        : `Save to mark this request as ${statusDraftLabel.toLowerCase()}.`}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Current status</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium",
+                          resolvedLeaveStatusTone
+                        )}
+                      >
+                        {resolvedLeaveStatusLabel}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {selected?.updatedAt
+                          ? `Updated ${formatDateTimeDisplay(selected.updatedAt)}`
+                          : "No HR decision recorded yet."}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </section>
 
