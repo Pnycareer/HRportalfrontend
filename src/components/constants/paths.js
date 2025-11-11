@@ -12,4 +12,6 @@ export const paths = {
   LEAVE_REQUESTS: "leaves",
   INSTRUCTOR_OVERTIME: "instructor-overtime",
   MONTHLY_OVERTIME_REPORT: "monthly-overtime-report",
+  SALARY_SHEET: "salary-sheet",
+  SALARY_SHEET_VIEWER: "salary-sheet/viewer",
 };

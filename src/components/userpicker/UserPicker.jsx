@@ -146,7 +146,7 @@ export default function UserPicker({ value, onChange, onUserChange }) {
       </SelectField>
 
       {/* Full user details */}
-      <UserDetailsCard user={selected} />
+      {/* <UserDetailsCard user={selected} /> */}
     </div>
   )
 }

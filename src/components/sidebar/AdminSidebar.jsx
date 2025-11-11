@@ -80,6 +80,11 @@ const groups = [
         icon: SheetIcon,
         label: "Salary Sheet",
       },
+      {
+        to: "/admin/salary-sheet/viewer",
+        icon: SheetIcon,
+        label: "Salary Viewer",
+      },
     ],
   },
 ];

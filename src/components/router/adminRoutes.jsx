@@ -5,6 +5,7 @@ import { paths } from "../constants/paths";
 import AdminLayout from "@/layouts/AdminLayout"; // EAGER (no lazy)
 import UserMonthlyReport from "@/pages/reports/UserMonthlyReport";
 import SalarySheetPage from "@/pages/admin/SalarySheet";
+import SalarySheetViewerPage from "@/pages/admin/SalarySheetViewer";
 
 const AllEmployees = React.lazy(() => import("@/pages/admin/AllEmployees"));
 const MarkAttendance = React.lazy(() => import("@/pages/admin/MarkAttendance"));
@@ -46,9 +47,10 @@ const adminRoutes = [
             path: "fuel-requisition-report",
             element: <FuelRequisitionReport />,
           },
-          { path: "salary-sheet", element: <SalarySheetPage /> },
-        ],
-      },
+          { path: paths.SALARY_SHEET, element: <SalarySheetPage /> },
+          { path: paths.SALARY_SHEET_VIEWER, element: <SalarySheetViewerPage /> },
+       ],
+     },
     ],
   },
 ];

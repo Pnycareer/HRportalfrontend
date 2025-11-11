@@ -6,9 +6,22 @@ import { Button } from "@/components/ui/button";
 import useSalarySheet from "@/hooks/useSalarySheet";
 import UserPicker from "@/components/userpicker/UserPicker";
 import api from "@/lib/axios";
+import { toast } from "sonner";
 
 const EMPLOYEE_STATUSES = ["active", "probation", "resigned", "terminated", "inactive"];
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const BASIC_FROM_GROSS_RATE = 0.6667; // 66.67%
+const MONTHS_PER_YEAR = 12;
+
+function computeAnnualIncomeTax(amount = 0) {
+  const income = Math.max(0, amount);
+  if (income <= 600000) return 0;
+  if (income <= 1200000) return (income - 600000) * 0.01;
+  if (income <= 2200000) return 6000 + (income - 1200000) * 0.11;
+  if (income <= 3200000) return 116000 + (income - 2200000) * 0.23;
+  if (income <= 4100000) return 346000 + (income - 3200000) * 0.3;
+  return 616000 + (income - 4100000) * 0.35;
+}
 
 // number-safe
 const toNum = (v) => (v === "" || v == null ? 0 : Number.isNaN(Number(v)) ? 0 : Number(v));
@@ -183,37 +196,36 @@ export default function SalarySheetForm({ onCreated }) {
     employeeStatus: "active",
     leavingDate: "",
 
+    bankName: "",
     bankAccountNo: "",
     bankAccountTitle: "",
     bankBranchCode: "",
 
-    basicSalary: "",
-    utilities: "",
-    previousMonthOmission: "",
-    extraDaysWorked: "",
-    overtimeAllDays: "",
-    mobileAllowance: "",
-    mealAllowance: "",
-    otherOvertimeAllHours: "",
-    ontimeIncentive: "",
-    conveyanceTaDa: "",
+    grossSalary: "0",
+    basicSalary: "0",
+    utilities: "0",
+    previousMonthOmission: "0",
+    extraDaysWorked: "0",
+    overtimeAllDays: "0",
+    mobileAllowance: "0",
+    mealAllowance: "0",
+    otherOvertimeAllHours: "0",
+    ontimeIncentive: "0",
+    conveyanceTaDa: "0",
 
-    annualIncomeTax: "",
-    incomeTax: "",
+    incomeTax: "0",
 
-    fine: "",
-    loanDeduction: "",
-    degreeDeduction: "",
-    advance: "",
+    fine: "0",
+    loanDeduction: "0",
+    degreeDeduction: "0",
+    advance: "0",
 
-    arrearsPreviousPayableSalary: "",
-    salaryPayable: "",
+    arrearsPreviousPayableSalary: "0",
 
-    paymentInMonthOf: "",
     paymentDate: "",
     bank: "",
-    cheque: "",
-    closingPayable: "",
+    cheque: "0",
+    closingPayable: "0",
     remarks: "",
   });
 
@@ -238,16 +250,84 @@ export default function SalarySheetForm({ onCreated }) {
     setForm((s) => (s.totalWorkingDays === autoWorking ? s : { ...s, totalWorkingDays: autoWorking }));
   }, [form.year, form.month, form.totalDays, userOffDays, workingDaysTouched]);
 
-  // setter
-  const set = (name) => (e) => {
-    const val = e?.target ? e.target.value : e;
-    if (name === "totalWorkingDays") setWorkingDaysTouched(true);
-    setForm((s) => ({ ...s, [name]: val }));
-    if (error) setError(null);
-  };
+  // keep basic + utilities in sync with gross salary
+  useEffect(() => {
+    const grossValue = Number(form.grossSalary);
+    if (!Number.isFinite(grossValue)) {
+      setForm((s) =>
+        s.basicSalary === "0" && s.utilities === "0"
+          ? s
+          : { ...s, basicSalary: "0", utilities: "0" }
+      );
+      return;
+    }
+
+    const safeGross = Math.max(0, grossValue);
+    const roundedBasic = Math.round(safeGross * BASIC_FROM_GROSS_RATE * 100) / 100;
+    const roundedUtilities = Math.round((safeGross - roundedBasic) * 100) / 100;
+
+    const basicStr = roundedBasic.toString();
+    const utilitiesStr = roundedUtilities.toString();
+
+    setForm((s) =>
+      s.basicSalary === basicStr && s.utilities === utilitiesStr
+        ? s
+        : { ...s, basicSalary: basicStr, utilities: utilitiesStr }
+    );
+  }, [form.grossSalary]);
+
+  const derivedTaxValues = useMemo(() => {
+    const grossValue = Number(form.grossSalary);
+    const safeGross = Number.isFinite(grossValue) ? Math.max(0, grossValue) : 0;
+    const monthly = Math.round(safeGross * 100) / 100;
+    const annualTaxable = Math.round(monthly * MONTHS_PER_YEAR * 100) / 100;
+    const annualIncomeTax = Math.round(computeAnnualIncomeTax(annualTaxable) * 100) / 100;
+    const monthlyIncomeTax = Math.round((annualIncomeTax / MONTHS_PER_YEAR) * 100) / 100;
+    return { taxableMonthly: monthly, annualTaxable, annualIncomeTax, monthlyIncomeTax };
+  }, [form.grossSalary]);
+
+  const deductionSummary = useMemo(() => {
+    const monthlyIncomeTaxValue = derivedTaxValues.monthlyIncomeTax;
+    const advanceValue = toNum(form.advance);
+    const total = Math.round((monthlyIncomeTaxValue + advanceValue) * 100) / 100;
+    return {
+      monthlyIncomeTaxValue,
+      advanceValue,
+      total,
+      display: total.toString(),
+    };
+  }, [derivedTaxValues.monthlyIncomeTax, form.advance]);
+
+  const netSalaryPayable = useMemo(() => {
+    const taxableMonthly = derivedTaxValues.taxableMonthly;
+    const deductionTotal = Number.isFinite(deductionSummary.total) ? deductionSummary.total : 0;
+    const net = Math.max(0, Math.round((taxableMonthly - deductionTotal) * 100) / 100);
+    return { value: net, display: net.toString() };
+  }, [derivedTaxValues.taxableMonthly, deductionSummary.total]);
+
+  const payrollMonthLabel = useMemo(() => {
+    if (!form.year || !form.month) return "";
+    const date = new Date(form.year, form.month - 1, 1);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString("en-US", { month: "long" });
+  }, [form.year, form.month]);
+
+  const paymentInMonthSummary = useMemo(() => {
+    const arrearsValue = toNum(form.arrearsPreviousPayableSalary);
+    const netValue = netSalaryPayable.value;
+    const total = Math.max(0, Math.round((netValue + arrearsValue) * 100) / 100);
+    return {
+      value: total,
+      display: total.toString(),
+      label: payrollMonthLabel
+        ? `Payment in Month of ${payrollMonthLabel}`
+        : "Payment in Month",
+    };
+  }, [form.arrearsPreviousPayableSalary, netSalaryPayable.value, payrollMonthLabel]);
 
   const numericFields = useMemo(
     () => [
+      "grossSalary",
       "basicSalary",
       "utilities",
       "previousMonthOmission",
@@ -258,15 +338,14 @@ export default function SalarySheetForm({ onCreated }) {
       "otherOvertimeAllHours",
       "ontimeIncentive",
       "conveyanceTaDa",
-      "annualIncomeTax",
       "incomeTax",
       "fine",
       "loanDeduction",
-      "degreeDeduction",
-      "advance",
-      "arrearsPreviousPayableSalary",
-      "salaryPayable",
-      "closingPayable",
+        "degreeDeduction",
+        "advance",
+        "arrearsPreviousPayableSalary",
+        "cheque",
+        "closingPayable",
       "year",
       "month",
       "totalDays",
@@ -274,6 +353,31 @@ export default function SalarySheetForm({ onCreated }) {
     ],
     []
   );
+
+  const numericFieldSet = useMemo(
+    () => new Set(numericFields),
+    [numericFields]
+  );
+
+  // setter
+  const set = (name) => (e) => {
+    let val = e?.target ? e.target.value : e;
+    if (typeof val === "number") val = val.toString();
+    if (numericFieldSet.has(name)) {
+      if (val == null || val === "") {
+        val = "0";
+      } else if (/^-?0[0-9]+/.test(val)) {
+        const isNegative = val.startsWith("-");
+        let trimmed = val.replace(/^-?0+/, "");
+        if (trimmed.startsWith(".")) trimmed = `0${trimmed}`;
+        const normalized = trimmed === "" ? "0" : trimmed;
+        val = isNegative ? `-${normalized}` : normalized;
+      }
+    }
+    if (name === "totalWorkingDays") setWorkingDaysTouched(true);
+    setForm((s) => ({ ...s, [name]: val }));
+    if (error) setError(null);
+  };
 
   // fetch accepted leaves for selected user + year/month
   useEffect(() => {
@@ -321,7 +425,9 @@ export default function SalarySheetForm({ onCreated }) {
   }, [form.userId, form.year, form.month]);
 
   const handleUserChange = (u) => {
-    const nextSalary = u && Number.isFinite(Number(u.salary)) ? Number(u.salary) : "";
+    const nextSalary = u && Number.isFinite(Number(u.salary)) ? Number(u.salary) : 0;
+    const nextGross = nextSalary.toString();
+    const bankName = u?.bank ?? u?.bankName ?? "";
     const bankAccountNo = u?.bankAccountNo ?? "";
     const bankAccountTitle =
       (u?.bankAccountTitle && u.bankAccountTitle.trim()) || (u?.fullName || "");
@@ -334,7 +440,8 @@ export default function SalarySheetForm({ onCreated }) {
 
     setForm((s) => ({
       ...s,
-      basicSalary: nextSalary,
+      grossSalary: nextGross,
+      bank: bankName,
       bankAccountNo,
       bankAccountTitle,
       bankBranchCode,
@@ -349,6 +456,29 @@ export default function SalarySheetForm({ onCreated }) {
 
     const payload = { ...form };
     numericFields.forEach((k) => (payload[k] = toNum(form[k])));
+    payload.bankName = form.bank || "";
+    const monthlyTaxable = Number.isFinite(payload.grossSalary)
+      ? Math.max(0, payload.grossSalary)
+      : 0;
+    payload.taxableSalaryCurrentMonth = monthlyTaxable;
+    payload.annualTaxableSalary =
+      Math.round(monthlyTaxable * MONTHS_PER_YEAR * 100) / 100;
+    payload.annualIncomeTax =
+      Math.round(
+        computeAnnualIncomeTax(payload.annualTaxableSalary) * 100
+      ) / 100;
+    payload.incomeTax =
+      payload.annualIncomeTax > 0
+        ? Math.round(
+            (payload.annualIncomeTax / MONTHS_PER_YEAR) * 100
+          ) / 100
+        : 0;
+    payload.totalDeduction = deductionSummary.total;
+    payload.salaryPayable =
+      netSalaryPayable.value == null ? 0 : netSalaryPayable.value;
+    payload.paymentInMonthOf = payrollMonthLabel
+      ? `${payrollMonthLabel}: ${paymentInMonthSummary.value}`
+      : paymentInMonthSummary.value.toString();
     if (!payload.leavingDate) delete payload.leavingDate;
     if (!payload.paymentDate) delete payload.paymentDate;
 
@@ -356,6 +486,7 @@ export default function SalarySheetForm({ onCreated }) {
       const created = await createSalarySheet(payload);
       if (onCreated) onCreated(created);
       setData(created);
+      toast.success("Salary saved successfully");
     } catch (_) {}
   };
 
@@ -402,10 +533,7 @@ export default function SalarySheetForm({ onCreated }) {
             name="totalDays"
             type="number"
             value={form.totalDays}
-            onChange={(e) => {
-              setForm((s) => ({ ...s, totalDays: e?.target ? e.target.value : e }));
-              if (error) setError(null);
-            }}
+            onChange={set("totalDays")}
             required
           />
 
@@ -458,6 +586,13 @@ export default function SalarySheetForm({ onCreated }) {
       <section className="rounded-2xl border p-5 shadow-sm">
         <h3 className="mb-4 text-lg font-semibold">Bank Snapshot</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <InputField
+            label="Bank Name"
+            name="bank"
+            value={form.bank}
+            onChange={set("bank")}
+            placeholder="Enter bank name"
+          />
           <InputField label="Account No" name="bankAccountNo" value={form.bankAccountNo} onChange={set("bankAccountNo")} />
           <InputField label="Account Title" name="bankAccountTitle" value={form.bankAccountTitle} onChange={set("bankAccountTitle")} />
           <InputField label="Branch Code" name="bankBranchCode" value={form.bankBranchCode} onChange={set("bankBranchCode")} />
@@ -468,9 +603,32 @@ export default function SalarySheetForm({ onCreated }) {
       <section className="rounded-2xl border p-5 shadow-sm">
         <h3 className="mb-4 text-lg font-semibold">Earnings & Allowances</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <InputField
+            label="Gross Salary"
+            name="grossSalary"
+            type="number"
+            value={form.grossSalary}
+            readOnly
+            placeholder="Select an employee to auto-fill"
+            description="Auto-fetched from the selected employee."
+          />
+          <InputField
+            label="Basic Salary (66.67%)"
+            name="basicSalary"
+            type="number"
+            value={form.basicSalary}
+            readOnly
+            description="Auto-calculated as 66.67% of Gross Salary."
+          />
+          <InputField
+            label="Utilities (Gross - Basic)"
+            name="utilities"
+            type="number"
+            value={form.utilities}
+            readOnly
+            description="Auto-calculated as Gross Salary minus Basic Salary."
+          />
           {[
-            "basicSalary",
-            "utilities",
             "previousMonthOmission",
             "extraDaysWorked",
             "overtimeAllDays",
@@ -496,7 +654,43 @@ export default function SalarySheetForm({ onCreated }) {
       <section className="rounded-2xl border p-5 shadow-sm">
         <h3 className="mb-4 text-lg font-semibold">Taxes & Deductions</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {["incomeTax", "annualIncomeTax", "fine", "loanDeduction", "degreeDeduction", "advance"].map(
+          <InputField
+            label="Taxable Salary (Current Month)"
+            name="taxableSalaryCurrentMonth"
+            type="number"
+            value={derivedTaxValues.taxableMonthly}
+            readOnly
+            placeholder="Matches Gross Salary"
+            description="Mirrors Gross Salary for reference."
+          />
+          <InputField
+            label="Annual Taxable Salary"
+            name="annualTaxableSalary"
+            type="number"
+            value={derivedTaxValues.annualTaxable}
+            readOnly
+            placeholder="Gross x 12"
+            description="Calculated as current taxable salary multiplied by 12."
+          />
+          <InputField
+            label="Annual Income Tax"
+            name="annualIncomeTax"
+            type="number"
+            value={derivedTaxValues.annualIncomeTax}
+            readOnly
+            placeholder="Based on tax slabs"
+            description="Auto-computed using the provided Pakistan tax slabs."
+          />
+          <InputField
+            label="Monthly Income Tax"
+            name="incomeTax"
+            type="number"
+            value={derivedTaxValues.monthlyIncomeTax}
+            readOnly
+            placeholder="Annual tax / 12"
+            description="Auto-calculated from the annual income tax."
+          />
+          {["fine", "loanDeduction", "degreeDeduction"].map(
             (field) => (
               <InputField
                 key={field}
@@ -515,25 +709,86 @@ export default function SalarySheetForm({ onCreated }) {
       <section className="rounded-2xl border p-5 shadow-sm">
         <h3 className="mb-4 text-lg font-semibold">Payables & Payment</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            "arrearsPreviousPayableSalary",
-            "salaryPayable",
-            "paymentInMonthOf",
-            "paymentDate",
-            "bank",
-            "cheque",
-            "closingPayable",
-            "remarks",
-          ].map((field) => (
-            <InputField
-              key={field}
-              label={field.replace(/([A-Z])/g, " $1")}
-              name={field}
-              value={form[field]}
-              onChange={set(field)}
-              type={field.toLowerCase().includes("date") ? "date" : "text"}
-            />
-          ))}
+          <InputField
+            label="Advance"
+            name="advance"
+            type="number"
+            value={form.advance}
+            onChange={set("advance")}
+          />
+          <InputField
+            label="Total Deduction"
+            name="totalDeduction"
+            type="number"
+            value={deductionSummary.display}
+            readOnly
+            placeholder="Advance + Monthly Income Tax"
+            description="Shows monthly income tax plus advance."
+          />
+          <InputField
+            label={
+              payrollMonthLabel
+                ? `Net Salary Payable for the month of ${payrollMonthLabel}`
+                : "Net Salary Payable"
+            }
+            name="salaryPayable"
+            type="number"
+            value={netSalaryPayable.display}
+            readOnly
+            placeholder="Taxable salary - total deductions"
+            description="Calculated automatically from the taxable salary and total deductions."
+          />
+          <InputField
+            label="Arrears Previous Payable Salary"
+            name="arrearsPreviousPayableSalary"
+            type="number"
+            value={form.arrearsPreviousPayableSalary}
+            onChange={set("arrearsPreviousPayableSalary")}
+          />
+          <InputField
+            label={paymentInMonthSummary.label}
+            name="paymentInMonthOf"
+            type="number"
+            value={paymentInMonthSummary.display}
+            readOnly
+            placeholder="Net salary payable + arrears"
+            description="Net salary payable plus arrears previously payable."
+          />
+          <InputField
+            label="Payment Date"
+            name="paymentDate"
+            type="date"
+            value={form.paymentDate}
+            onChange={set("paymentDate")}
+          />
+          <InputField
+            label="Bank"
+            name="bank"
+            value={form.bank}
+            onChange={set("bank")}
+            placeholder="Enter bank name (can stay blank)"
+          />
+          <InputField
+            label="Cheque"
+            name="cheque"
+            type="number"
+            value={form.cheque}
+            onChange={set("cheque")}
+          />
+          <InputField
+            label="Closing Payable"
+            name="closingPayable"
+            type="number"
+            value={form.closingPayable}
+            onChange={set("closingPayable")}
+          />
+          <InputField
+            label="Remarks"
+            name="remarks"
+            value={form.remarks}
+            onChange={set("remarks")}
+            placeholder="Optional notes"
+          />
         </div>
       </section>
 

@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios";
+import { motion, AnimatePresence } from "framer-motion";
 
 function formatNotificationDateRange(from, to) {
   try {
@@ -211,6 +212,17 @@ const ANNOUNCEMENTS = [
   },
 ];
 
+const SIDEBAR_WIDTH = {
+  expanded: 280,
+  collapsed: 92,
+};
+
+const sidebarLabelVariants = {
+  initial: { opacity: 0, x: -8 },
+  animate: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: -8 },
+};
+
 function SidebarItem({ href, label, icon, collapsed }) {
   const Icon = icon;
   const resolvedPath = useResolvedPath(href);
@@ -241,7 +253,21 @@ function SidebarItem({ href, label, icon, collapsed }) {
             >
               <Icon className="h-4 w-4" />
             </span>
-            {!collapsed && <span className="flex-1 truncate">{label}</span>}
+            <AnimatePresence initial={false} mode="wait">
+              {!collapsed && (
+                <motion.span
+                  key="label"
+                  variants={sidebarLabelVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="flex-1 truncate"
+                >
+                  {label}
+                </motion.span>
+              )}
+            </AnimatePresence>
             <span
               className={cn(
                 "absolute right-3 top-1/2 hidden h-6 w-[3px] -translate-y-1/2 rounded-full bg-primary/80 transition-all duration-300",
@@ -260,10 +286,73 @@ function SidebarItem({ href, label, icon, collapsed }) {
   );
 }
 
+const DesktopSidebar = React.memo(function DesktopSidebar({ navItems }) {
+  const [collapsed, setCollapsed] = React.useState(false);
+  const sidebarWidth = collapsed ? SIDEBAR_WIDTH.collapsed : SIDEBAR_WIDTH.expanded;
+  const toggleCollapsed = React.useCallback(() => {
+    setCollapsed((value) => !value);
+  }, []);
+
+  return (
+    <motion.aside
+      layout
+      initial={false}
+      animate={{ width: sidebarWidth }}
+      transition={{ type: "spring", stiffness: 340, damping: 32, mass: 0.7 }}
+      className="hidden md:flex h-full flex-col gap-4 rounded-3xl border border-white/10 bg-card/70 p-4 shadow-[0_25px_50px_-24px_rgba(15,23,42,0.65)] backdrop-blur-xl"
+      style={{ width: sidebarWidth }}
+    >
+      <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-background/60 px-3 py-3">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-card/70">
+            <Settings className="h-5 w-5 text-primary" />
+          </span>
+          <AnimatePresence initial={false} mode="wait">
+            {!collapsed && (
+              <motion.div
+                key="sidebar-meta"
+                variants={sidebarLabelVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="leading-tight"
+              >
+                <div className="text-sm font-semibold text-foreground">
+                  Employee Command
+                </div>
+                <div className="text-xs text-muted-foreground">Version 1.0</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="rounded-full border border-white/10 bg-white/5 hover:bg-white/10"
+          onClick={toggleCollapsed}
+          title={collapsed ? "Expand sidebar (B)" : "Collapse sidebar (B)"}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+
+      <nav className="space-y-2">
+        {navItems.map((item) => (
+          <SidebarItem key={item.href} {...item} collapsed={collapsed} />
+        ))}
+      </nav>
+    </motion.aside>
+  );
+});
+
 export default function EmployeeLayout({ title = "Employee" }) {
   const { user, logout } = useAuth();
   const { notifications, unreadCount, markAllAsRead } = useNotifications();
-  const [collapsed, setCollapsed] = React.useState(false);
   const showNotifications = Boolean(user?.isTeamLead);
   const unreadLabel = unreadCount > 9 ? "9+" : String(unreadCount);
 
@@ -782,51 +871,7 @@ export default function EmployeeLayout({ title = "Employee" }) {
         </header>
 
         <div className="mx-auto flex w-full flex-1 flex-col gap-6 px-3 py-6 sm:px-6 md:grid md:grid-cols-[auto_minmax(0,1fr)] md:items-start">
-          <aside
-            className={cn(
-              "hidden md:flex h-full flex-col gap-4 rounded-3xl border border-white/10 bg-card/70 p-4 shadow-[0_25px_50px_-24px_rgba(15,23,42,0.65)] backdrop-blur-xl transition-all duration-300",
-              collapsed ? "w-[92px]" : "w-[280px]"
-            )}
-          >
-            <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-background/60 px-3 py-3">
-              <div className="flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-card/70">
-                  <Settings className="h-5 w-5 text-primary" />
-                </span>
-                {!collapsed && (
-                  <div className="leading-tight">
-                    <div className="text-sm font-semibold text-foreground">
-                      Employee Command
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Version 1.0
-                    </div>
-                  </div>
-                )}
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="rounded-full border border-white/10 bg-white/5 hover:bg-white/10"
-                onClick={() => setCollapsed((value) => !value)}
-                title={
-                  collapsed ? "Expand sidebar (B)" : "Collapse sidebar (B)"
-                }
-              >
-                {collapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-
-            <nav className="space-y-2">
-              {navItems.map((item) => (
-                <SidebarItem key={item.href} {...item} collapsed={collapsed} />
-              ))}
-            </nav>
-          </aside>
+          <DesktopSidebar navItems={navItems} />
 
           <main className="min-w-0 space-y-6">
             <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-card/60 px-6 py-7 shadow-[0_25px_50px_-12px_rgba(15,23,42,0.65)] backdrop-blur-xl sm:px-8 md:py-8">
