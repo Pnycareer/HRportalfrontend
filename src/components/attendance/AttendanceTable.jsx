@@ -1,4 +1,3 @@
-// components/attendance/AttendanceTable.jsx
 import React from "react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -267,7 +266,7 @@ export default function AttendanceTable({
                 const merged = { ...saved, ...draft };
 
                 const offDays = Array.isArray(u.officialOffDays) ? u.officialOffDays : [];
-                const isOfficialOffToday = !!(todayWeekday && offDays.includes(todayWeekday));
+                const todayIsOff = !!(weekdayFromYmd(dateYmd) && offDays.includes(weekdayFromYmd(dateYmd)));
 
                 const isRowCurrentlyOff =
                   (merged.status || "").toLowerCase().includes("off") ||
@@ -278,14 +277,32 @@ export default function AttendanceTable({
                 const checkInVal = merged.checkIn || "";
                 const checkOutVal = merged.checkOut || "";
 
+                // ==== FIXED total calculation precedence ====
                 const inMin = hhmmToMinutes(checkInVal);
                 const outMin = hhmmToMinutes(checkOutVal);
                 const hasBoth = inMin != null && outMin != null;
-                const clientDur = hasBoth && outMin >= inMin ? outMin - inMin : null;
+
+                // Detect if user has edited time fields in this session
+                const timesEdited = Object.prototype.hasOwnProperty.call(draft, "checkIn") ||
+                                    Object.prototype.hasOwnProperty.call(draft, "checkOut");
+
+                // Only show "Invalid" when the user is actively editing and out < in
+                const invalidOrder = timesEdited && hasBoth && outMin < inMin;
+
+                // Client-side duration (same-day only; we deliberately treat out<in as invalid while editing)
+                const clientDur = hasBoth && !invalidOrder ? (outMin - inMin) : null;
+
+                // Server authoritative minutes (from backend snapshot)
                 const serverDur = merged.workedMinutes ?? null;
-                const durationMin = serverDur ?? clientDur;
+
+                // Precedence:
+                // - If times were edited, prefer client calc (even if server has old value)
+                // - Otherwise prefer serverDur, falling back to clientDur
+                const durationMin = timesEdited
+                  ? clientDur
+                  : (serverDur != null ? serverDur : clientDur);
+
                 const durationStr = durationMin == null ? "—" : minutesToHHMM(durationMin);
-                const invalidOrder = hasBoth && outMin < inMin;
 
                 const hasNote = !!(merged.note && merged.note.trim().length);
                 const subStatusVal = merged.status === "present" ? merged.subStatus || "" : "";
@@ -299,10 +316,10 @@ export default function AttendanceTable({
                   : "";
 
                 return (
-                  <TableRow key={u._id} className={`odd:bg-muted/40 hover:bg-muted/60 transition-colors ${isOfficialOffToday ? "opacity-95" : ""} [&>*]:py-2`}>
+                  <TableRow key={u._id} className={`odd:bg-muted/40 hover:bg-muted/60 transition-colors ${todayIsOff ? "opacity-95" : ""} [&>*]:py-2`}>
                     <TableCell className="font-medium">
                       <div className="max-w-[220px] truncate">{u.fullName}</div>
-                      {isOfficialOffToday && (
+                      {todayIsOff && (
                         <div className="mt-1 inline-flex items-center gap-2">
                           <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide">Off today</span>
                         </div>
@@ -369,8 +386,8 @@ export default function AttendanceTable({
                         value={checkInVal}
                         onChange={(e) => onCheckInChange?.(u._id, e.target.value)}
                         className="h-8 text-sm font-mono"
-                        disabled={isOfficialOffToday && isRowCurrentlyOff}
-                        title={isOfficialOffToday && isRowCurrentlyOff ? "Official off day — time entry disabled" : ""}
+                        disabled={todayIsOff && isRowCurrentlyOff}
+                        title={todayIsOff && isRowCurrentlyOff ? "Official off day — time entry disabled" : ""}
                       />
                     </TableCell>
 
@@ -381,8 +398,8 @@ export default function AttendanceTable({
                         value={checkOutVal}
                         onChange={(e) => onCheckOutChange?.(u._id, e.target.value)}
                         className="h-8 text-sm font-mono"
-                        disabled={isOfficialOffToday && isRowCurrentlyOff}
-                        title={isOfficialOffToday && isRowCurrentlyOff ? "Official off day — time entry disabled" : ""}
+                        disabled={todayIsOff && isRowCurrentlyOff}
+                        title={todayIsOff && isRowCurrentlyOff ? "Official off day — time entry disabled" : ""}
                       />
                     </TableCell>
 

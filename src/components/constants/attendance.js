@@ -4,7 +4,6 @@ export const STATUSES = [
   "leave",
   "late",
   "official_off",
-  "short_leave",
   "public_holiday",
 ];
 
