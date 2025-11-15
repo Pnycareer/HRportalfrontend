@@ -1,14 +1,13 @@
 // src/pages/DailyAttendanceReport.jsx
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { CITIES, getBranchesForCity } from '@/components/constants/locations'
 import api from '@/lib/axios'
-import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
-// just color for status text
+// UI status text colors
 const STATUS_COLOR_CLASSES = {
   present: 'text-green-700',
-  late: 'text-yellow-600',
+  late: 'text-orange-500',
   absent: 'text-red-600',
   leave: 'text-blue-600',
   official_off: 'text-slate-600',
@@ -17,124 +16,16 @@ const STATUS_COLOR_CLASSES = {
   missing: 'text-slate-500'
 }
 
-// ---------- OKLCH → rgb shim so html2canvas doesn't die ----------
-const OKLCH_REGEX = /oklch\(([^)]+)\)/gi
-
-const clamp01 = (value) => Math.min(1, Math.max(0, value))
-
-const parseAlphaSegment = (segment) => {
-  if (!segment) return 1
-  const trimmed = segment.trim()
-  if (!trimmed) return 1
-  if (trimmed.endsWith('%')) {
-    const parsed = parseFloat(trimmed.slice(0, -1))
-    return clamp01(Number.isNaN(parsed) ? 1 : parsed / 100)
-  }
-  const numeric = parseFloat(trimmed)
-  return clamp01(Number.isNaN(numeric) ? 1 : numeric)
-}
-
-const formatAlpha = (alpha) => {
-  if (alpha >= 0.999) return null
-  const normalized = clamp01(alpha)
-  const formatted = normalized.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
-  return formatted || '0'
-}
-
-const oklchToSrgbString = (L, C, h, alpha = 1) => {
-  const hr = (h * Math.PI) / 180
-  const a = Math.cos(hr) * C
-  const b = Math.sin(hr) * C
-
-  const l_ = L + 0.3963377774 * a + 0.2158037573 * b
-  const m_ = L - 0.1055613458 * a - 0.0638541728 * b
-  const s_ = L - 0.0894841775 * a - 1.291485548 * b
-
-  const l = l_ ** 3
-  const m = m_ ** 3
-  const s = s_ ** 3
-
-  const r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
-  const g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
-  const bVal = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
-
-  const toSrgbChannel = (value) => {
-    const clamped = clamp01(value)
-    const srgb =
-      clamped <= 0.0031308
-        ? 12.92 * clamped
-        : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055
-    return Math.round(clamp01(srgb) * 255)
-  }
-
-  const [sr, sg, sb] = [r, g, bVal].map(toSrgbChannel)
-  const alphaStr = formatAlpha(alpha)
-
-  return alphaStr
-    ? `rgba(${sr}, ${sg}, ${sb}, ${alphaStr})`
-    : `rgb(${sr}, ${sg}, ${sb})`
-}
-
-const parseOklchBody = (body) => {
-  try {
-    let alpha = 1
-    let colorBody = body
-    if (body.includes('/')) {
-      const [colorSegment, alphaSegment] = body.split('/')
-      colorBody = colorSegment
-      alpha = parseAlphaSegment(alphaSegment)
-    }
-    const parts = colorBody
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((token) => parseFloat(token))
-    while (parts.length < 3) parts.push(0)
-    const [L, C, h] = parts
-    if ([L, C, h].some((component) => Number.isNaN(component))) {
-      return 'rgb(0, 0, 0)'
-    }
-    return oklchToSrgbString(L, C, h, alpha)
-  } catch (err) {
-    console.warn('Failed to parse oklch color for html2canvas', body, err)
-    return 'rgb(0, 0, 0)'
-  }
-}
-
-const replaceOklchInString = (value) => {
-  if (typeof value !== 'string' || value.indexOf('oklch') === -1) {
-    return value
-  }
-  return value.replace(OKLCH_REGEX, (_, body) => parseOklchBody(body))
-}
-
-const wrapComputedStyle = (style) => {
-  if (!style) return style
-  return new Proxy(style, {
-    get(target, prop) {
-      const original = Reflect.get(target, prop, target)
-      if (typeof original === 'function') {
-        return (...args) => {
-          const result = original.apply(target, args)
-          return typeof result === 'string' ? replaceOklchInString(result) : result
-        }
-      }
-      return typeof original === 'string' ? replaceOklchInString(original) : original
-    }
-  })
-}
-
-const withColorSafeComputedStyles = async (callback) => {
-  if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
-    return callback()
-  }
-  const originalGetComputedStyle = window.getComputedStyle
-  window.getComputedStyle = (...args) => wrapComputedStyle(originalGetComputedStyle(...args))
-  try {
-    return await callback()
-  } finally {
-    window.getComputedStyle = originalGetComputedStyle
-  }
+// PDF status colors (R,G,B)
+const STATUS_PDF_COLORS = {
+  present: [22, 163, 74], // green
+  late: [245, 158, 11], // amber
+  absent: [239, 68, 68], // red
+  leave: [37, 99, 235], // blue
+  official_off: [100, 116, 139], // slate
+  short_leave: [249, 115, 22], // orange
+  public_holiday: [8, 145, 178], // teal
+  missing: [148, 163, 184] // muted slate
 }
 
 // ---------- helpers ----------
@@ -158,10 +49,9 @@ function formatDateHuman(iso) {
 }
 
 const DailyAttendanceReport = () => {
-  // local date so no UTC off-by-one
   const [date, setDate] = useState(getTodayLocalIso)
 
-  // default city + branch
+  // default Lahore / Arfa tower
   const [city, setCity] = useState('Lahore')
   const [branch, setBranch] = useState('Arfa Karim Tower')
   const [branchesList, setBranchesList] = useState(() =>
@@ -172,9 +62,6 @@ const DailyAttendanceReport = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const sheetRef = useRef(null)
-
-  // update branch list when city changes (and keep branch valid)
   useEffect(() => {
     const list = getBranchesForCity(city)
     setBranchesList(list)
@@ -209,97 +96,259 @@ const DailyAttendanceReport = () => {
     }
   }, [date, branch])
 
-  // auto load on mount + whenever date/branch changes
   useEffect(() => {
     fetchAttendance()
   }, [fetchAttendance])
 
   const hasSheetData = !!(data?.departments && data.departments.length)
 
-  const captureSheetCanvas = async () => {
-    if (!sheetRef.current) return null
+  // --------- PDF generation (modern A4, colored status) ----------
+  const handleDownloadPdf = () => {
+    if (!hasSheetData) return
 
-    const runCapture = () =>
-      html2canvas(sheetRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true
+    const doc = new jsPDF('l', 'pt', 'a4') // landscape A4
+
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const marginX = 40
+    const marginTop = 40
+    const marginBottom = 40
+    const usableWidth = pageWidth - marginX * 2
+
+    const defaultTextColor = [31, 41, 55] // slate-800
+    const mutedTextColor = [100, 116, 139] // slate-500/600
+    const headerBg = [248, 250, 252] // slate-50
+    const zebraBg = [248, 250, 252] // same as header but lighter feel
+
+    const setDefaultText = () => doc.setTextColor(...defaultTextColor)
+
+    // Column setup
+    const columns = [
+      { key: 'employeeId', label: 'EMP CODE', align: 'center', weight: 0.09 },
+      { key: 'fullName', label: 'NAME', align: 'left', weight: 0.22 },
+      { key: 'officialOff', label: 'OFFICIAL OFF', align: 'left', weight: 0.17 },
+      { key: 'dutyRoster', label: 'DUTY', align: 'left', weight: 0.18 },
+      { key: 'checkIn', label: 'IN', align: 'center', weight: 0.07 },
+      { key: 'checkOut', label: 'OUT', align: 'center', weight: 0.07 },
+      { key: 'status', label: 'STATUS', align: 'center', weight: 0.09 },
+      { key: 'remarks', label: 'REMARKS', align: 'left', weight: 0.11 }
+    ]
+    columns.forEach((c) => {
+      c.width = usableWidth * c.weight
+    })
+
+    const headerFontSize = 10
+    const bodyFontSize = 9
+    const departmentFontSize = 10
+    const lineHeight = 18
+
+    let y = marginTop
+
+    // --- Page chrome: white bg, subtle top bar ---
+    doc.setFillColor(255, 255, 255)
+    doc.rect(0, 0, pageWidth, pageHeight, 'F')
+
+    doc.setFillColor(248, 250, 252) // light top strip
+    doc.rect(0, 0, pageWidth, 32, 'F')
+
+    // --- Top title area ---
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.setTextColor(15, 23, 42) // slate-900
+    const title = `Daily Attendance — ${data?.branch || branch || 'N/A'}`
+    doc.text(title, marginX, y)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...mutedTextColor)
+    const dateStr = formatDateHuman(data?.date || date)
+    const totalStr =
+      data?.totalEmployees != null ? `Employees: ${data.totalEmployees}` : ''
+    const rightTop = totalStr ? `${dateStr}   •   ${totalStr}` : dateStr
+    doc.text(rightTop, pageWidth - marginX, y, { align: 'right' })
+
+    y += 26
+
+    const drawTableHeader = () => {
+      const headerHeight = lineHeight + 4
+      doc.setFillColor(...headerBg)
+      doc.setDrawColor(226, 232, 240) // border color
+      doc.rect(marginX, y - headerHeight + 6, usableWidth, headerHeight, 'F')
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(headerFontSize)
+      doc.setTextColor(71, 85, 105) // slate-600
+
+      let x = marginX
+      columns.forEach((col) => {
+        const textX =
+          col.align === 'center'
+            ? x + col.width / 2
+            : col.align === 'right'
+            ? x + col.width - 4
+            : x + 4
+        doc.text(col.label, textX, y, {
+          align: col.align === 'left' ? 'left' : col.align
+        })
+        x += col.width
       })
 
-    return withColorSafeComputedStyles(runCapture)
-  }
-
-  // Download as PDF
-  const handleDownloadPdf = async () => {
-    if (!hasSheetData) return
-    const canvas = await captureSheetCanvas()
-    if (!canvas) return
-
-    const imgData = canvas.toDataURL('image/png')
-
-    const pdf = new jsPDF('l', 'pt', 'a4') // landscape A4
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-
-    const margin = 20
-    const imgWidth = pageWidth - margin * 2
-    const imgHeight = (canvas.height / canvas.width) * imgWidth
-
-    let imgY = margin
-    if (imgHeight < pageHeight - margin * 2) {
-      imgY = (pageHeight - imgHeight) / 2
+      y += lineHeight
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(bodyFontSize)
+      setDefaultText()
     }
 
-    pdf.addImage(imgData, 'PNG', margin, imgY, imgWidth, imgHeight)
+    const drawPageHeader = () => {
+      doc.setFillColor(255, 255, 255)
+      doc.rect(0, 0, pageWidth, pageHeight, 'F')
+      doc.setFillColor(248, 250, 252)
+      doc.rect(0, 0, pageWidth, 32, 'F')
 
-    const reportDate = data?.date || date
-    const reportBranch = data?.branch || branch || 'branch'
-    pdf.save(`attendance_${reportDate}_${reportBranch}.pdf`)
-  }
+      let yTop = marginTop
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.setTextColor(15, 23, 42)
+      doc.text(title, marginX, yTop)
 
-  // Share image to WhatsApp
-  const handleShareSnapWhatsapp = async () => {
-    if (!hasSheetData) return
-    const canvas = await captureSheetCanvas()
-    if (!canvas) return
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(...mutedTextColor)
+      doc.text(dateStr, pageWidth - marginX, yTop, { align: 'right' })
 
-    const reportDate = data?.date || date
-    const reportBranch = data?.branch || branch || 'branch'
-    const title = `Daily Attendance Report - ${formatDateHuman(
-      reportDate
-    )}${reportBranch ? ` - ${reportBranch}` : ''}`
+      yTop += 26
+      y = yTop
+      drawTableHeader()
+    }
 
-    canvas.toBlob(async (blob) => {
-      if (!blob) return
-      const file = new File(
-        [blob],
-        `attendance_${reportDate}_${reportBranch}.png`,
-        { type: 'image/png' }
-      )
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            title,
-            text: title,
-            files: [file]
-          })
-        } catch (err) {
-          console.error(err)
-        }
-      } else {
-        const dataUrl = canvas.toDataURL('image/png')
-        const link = document.createElement('a')
-        link.href = dataUrl
-        link.download = `attendance_${reportDate}_${reportBranch}.png`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        alert(
-          'Your browser cannot share images directly. The snapshot has been downloaded — share it manually in your WhatsApp group.'
-        )
+    const maybeAddPage = () => {
+      if (y > pageHeight - marginBottom) {
+        doc.addPage()
+        drawPageHeader()
       }
-    }, 'image/png')
+    }
+
+    drawTableHeader()
+
+    // --- Departments + rows ---
+    data.departments.forEach((dept, deptIndex) => {
+      const employees = dept.employees || []
+
+      // Department header row
+      maybeAddPage()
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(departmentFontSize)
+      doc.setTextColor(30, 64, 175) // indigo-700
+     const deptText = `${dept.name}`
+      doc.text(deptText, marginX, y)
+      y += lineHeight - 4
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(bodyFontSize)
+      setDefaultText()
+
+      if (!employees.length) {
+        maybeAddPage()
+        doc.setTextColor(...mutedTextColor)
+        doc.text('No employees for this department.', marginX + 10, y)
+        setDefaultText()
+        y += lineHeight
+        return
+      }
+
+      employees.forEach((emp, idx) => {
+        maybeAddPage()
+
+        const isZebra = (idx + deptIndex) % 2 === 1
+        if (isZebra) {
+          doc.setFillColor(...zebraBg)
+          doc.rect(marginX, y - lineHeight + 6, usableWidth, lineHeight, 'F')
+        }
+
+        let x = marginX
+        columns.forEach((col) => {
+          let val = ''
+
+          switch (col.key) {
+            case 'employeeId':
+              val = emp.employeeId != null ? String(emp.employeeId) : ''
+              break
+            case 'fullName':
+              val = emp.fullName || ''
+              break
+            case 'officialOff':
+              val = emp.officialOff || '-'
+              break
+            case 'dutyRoster':
+              val = emp.dutyRoster || '-'
+              break
+            case 'checkIn':
+              val = emp.checkIn || '-'
+              break
+            case 'checkOut':
+              val = emp.checkOut || '-'
+              break
+            case 'status':
+              val = emp.statusLabel || emp.status || ''
+              break
+            case 'remarks':
+              val = emp.remarks || ''
+              break
+            default:
+              val = ''
+          }
+
+          const textX =
+            col.align === 'center'
+              ? x + col.width / 2
+              : col.align === 'right'
+              ? x + col.width - 4
+              : x + 4
+
+          // status gets color
+          if (col.key === 'status') {
+            const color =
+              STATUS_PDF_COLORS[emp.status] || STATUS_PDF_COLORS.missing
+            doc.setTextColor(...color)
+            doc.setFont('helvetica', 'bold')
+          } else if (col.key === 'fullName') {
+            setDefaultText()
+            doc.setFont('helvetica', 'bold')
+          } else {
+            setDefaultText()
+            doc.setFont('helvetica', 'normal')
+          }
+
+          doc.text(String(val), textX, y, {
+            align: col.align === 'left' ? 'left' : col.align
+          })
+
+          x += col.width
+        })
+
+        setDefaultText()
+        y += lineHeight
+      })
+
+      y += 4
+    })
+
+    // footer with page number
+    const pageCount = doc.getNumberOfPages()
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setFontSize(8)
+      doc.setTextColor(...mutedTextColor)
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        pageHeight - 16,
+        { align: 'center' }
+      )
+    }
+
+    const reportDate = data?.date || date
+    const reportBranch = data?.branch || branch || 'branch'
+    doc.save(`attendance_${reportDate}_${reportBranch}.pdf`)
   }
 
   return (
@@ -401,19 +450,6 @@ const DailyAttendanceReport = () => {
             >
               Download PDF
             </button>
-
-            <button
-              type='button'
-              onClick={handleShareSnapWhatsapp}
-              disabled={!hasSheetData}
-              className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm transition ${
-                hasSheetData
-                  ? 'bg-emerald-500 hover:bg-emerald-600'
-                  : 'cursor-not-allowed bg-slate-400'
-              }`}
-            >
-              Share Snapshot (WhatsApp)
-            </button>
           </div>
         </div>
       </div>
@@ -432,12 +468,9 @@ const DailyAttendanceReport = () => {
         </p>
       )}
 
-      {/* ONE SHEET – department-wise */}
+      {/* On-screen table (for viewing only) */}
       {!loading && hasSheetData && (
-        <div
-          ref={sheetRef}
-          className='rounded-xl border border-slate-200 bg-white shadow-sm'
-        >
+        <div className='rounded-xl border border-slate-200 bg-white shadow-sm'>
           <div className='flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5'>
             <span className='text-sm font-semibold text-slate-800'>
               Branch-wise Sheet — {data.branch || branch || 'N/A'}
@@ -490,9 +523,7 @@ const DailyAttendanceReport = () => {
                           >
                             <div className='flex items-center justify-between'>
                               <span>{dept.name}</span>
-                              <span className='text-[11px] font-normal uppercase tracking-normal text-slate-500'>
-                                Employees: {employees.length}
-                              </span>
+                              
                             </div>
                           </td>
                         </tr>
@@ -524,13 +555,11 @@ const DailyAttendanceReport = () => {
                                 <td className='whitespace-nowrap px-3 py-2 text-xs text-center text-slate-800'>
                                   {emp.checkOut || '-'}
                                 </td>
-
                                 <td className='whitespace-nowrap px-3 py-2 text-xs text-center'>
                                   <span className={`font-semibold ${statusClass}`}>
                                     {emp.statusLabel || emp.status}
                                   </span>
                                 </td>
-
                                 <td className='px-3 py-2 text-xs text-left text-slate-800'>
                                   {emp.remarks || ''}
                                 </td>
