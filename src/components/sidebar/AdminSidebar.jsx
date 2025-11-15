@@ -51,6 +51,11 @@ const groups = [
         label: "Leave Reports",
       },
       {
+        to: "/admin/daily-attendance-report",
+        icon: BarChart3,
+        label: "Daily Attendance Report",
+      },
+      {
         to: "/admin/monthly-report",
         icon: BarChart3,
         label: "Monthly Report",

@@ -6,6 +6,7 @@ import AdminLayout from "@/layouts/AdminLayout"; // EAGER (no lazy)
 import UserMonthlyReport from "@/pages/reports/UserMonthlyReport";
 import SalarySheetPage from "@/pages/admin/SalarySheet";
 import SalarySheetViewerPage from "@/pages/admin/SalarySheetViewer";
+import DailyAttendanceReport from "@/pages/reports/DailyAttendanceReport";
 
 const AllEmployees = React.lazy(() => import("@/pages/admin/AllEmployees"));
 const MarkAttendance = React.lazy(() => import("@/pages/admin/MarkAttendance"));
@@ -37,6 +38,7 @@ const adminRoutes = [
           { path: paths.LEAVE_REQUESTS, element: <LeaveApprovals /> },
           { path: "leave-report", element: <LeaveReports /> },
           { path: "monthly-report", element: <MonthlyBranchReport /> },
+          { path: "daily-attendance-report", element: <DailyAttendanceReport/>},
           { path: "user-monthly", element: <UserMonthlyReport /> },
           {
             path: paths.MONTHLY_OVERTIME_REPORT,
