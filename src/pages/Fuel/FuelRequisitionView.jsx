@@ -214,7 +214,7 @@ export default function FuelRequisitionView({
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col">
-            <h1 className="text-2xl md:text-3xl font-bold">Requisition Form</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Requisition Form </h1>
             <div className="text-muted-foreground">Employee: {user.fullName || "-"}</div>
           </div>
           <div className="flex items-center gap-2">

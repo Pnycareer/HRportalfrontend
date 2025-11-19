@@ -10,14 +10,19 @@ import { Separator } from "@/components/ui/separator";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
+
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 const LAYOUT_STEPS = [
-  { margin: 12, headerFont: 17, titleFont: 18, subFont: 10.5, infoLabel: 9.5, infoValue: 8.8, infoRowHeight: 8.5, tableFont: 8.6, headFont: 9.4, padding: 1.3, lineHeight: 1.16, noteFont: 8, },
-  { margin: 10, headerFont: 16, titleFont: 17, subFont: 10, infoLabel: 9, infoValue: 8.2, infoRowHeight: 7.6, tableFont: 7.8, headFont: 8.6, padding: 1, lineHeight: 1.1, noteFont: 7.5, },
-  { margin: 8.5, headerFont: 15, titleFont: 16, subFont: 9.4, infoLabel: 8.3, infoValue: 7.5, infoRowHeight: 7, tableFont: 7, headFont: 7.9, padding: 0.82, lineHeight: 1.07, noteFont: 7.1, },
-  { margin: 7, headerFont: 14, titleFont: 15, subFont: 9, infoLabel: 7.8, infoValue: 7, infoRowHeight: 6.4, tableFont: 6.2, headFont: 7.2, padding: 0.68, lineHeight: 1.05, noteFont: 6.8, },
+  { margin: 12, headerFont: 17, titleFont: 18, subFont: 10.5, infoLabel: 9.5, infoValue: 8.8, infoRowHeight: 8.5, tableFont: 8.6, headFont: 9.4, padding: 1.3, lineHeight: 1.16, noteFont: 8, descMinWidth: 44 },
+  { margin: 10, headerFont: 16, titleFont: 17, subFont: 10, infoLabel: 9, infoValue: 8.2, infoRowHeight: 7.6, tableFont: 7.8, headFont: 8.6, padding: 1, lineHeight: 1.1, noteFont: 7.5, descMinWidth: 42 },
+  { margin: 8.5, headerFont: 15, titleFont: 16, subFont: 9.4, infoLabel: 8.3, infoValue: 7.5, infoRowHeight: 7, tableFont: 7, headFont: 7.9, padding: 0.82, lineHeight: 1.07, noteFont: 7.1, descMinWidth: 40 },
+  { margin: 7, headerFont: 14, titleFont: 15, subFont: 9, infoLabel: 7.8, infoValue: 7, infoRowHeight: 6.4, tableFont: 6.2, headFont: 7.2, padding: 0.68, lineHeight: 1.05, noteFont: 6.8, descMinWidth: 38 },
+  { margin: 6, headerFont: 13, titleFont: 14, subFont: 8.7, infoLabel: 7.5, infoValue: 6.8, infoRowHeight: 5.9, tableFont: 5.8, headFont: 6.8, padding: 0.6, lineHeight: 1.04, noteFont: 6.4, descMinWidth: 36 },
+  { margin: 5, headerFont: 12, titleFont: 13, subFont: 8.2, infoLabel: 7.1, infoValue: 6.3, infoRowHeight: 5.4, tableFont: 5.3, headFont: 6.2, padding: 0.5, lineHeight: 1.02, noteFont: 6, descMinWidth: 34 },
+  { margin: 4.4, headerFont: 11.4, titleFont: 12.2, subFont: 7.6, infoLabel: 6.6, infoValue: 5.8, infoRowHeight: 4.9, tableFont: 4.8, headFont: 5.7, padding: 0.42, lineHeight: 1.01, noteFont: 5.6, descMinWidth: 32 },
 ];
 
 export default function FuelRequisitionReport() {
@@ -33,6 +38,9 @@ export default function FuelRequisitionReport() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [verifyingSrNo, setVerifyingSrNo] = useState(null);
+  const { user: authUser } = useAuth();
+
+  console.log(authUser?.fullName, "user");
 
   useEffect(() => {
     let ignore = false;
@@ -120,17 +128,17 @@ export default function FuelRequisitionReport() {
     }
 
     try {
-      const user = result.user || {};
+      const recordUser = result.user || {};
       const monthLabel = [result.month || filters.month, result.year || filters.year].filter(Boolean).join(", ");
-      const displayName = selectedUser?.fullName || user.fullName || "employee";
+      const displayName = (recordUser.fullName || "").trim() || "employee";
 
       const infoRows = [
-        { label: "Name", value: user.fullName || "-" },
-        { label: "Employee ID", value: user.employeeId ?? "-" },
-        { label: "Email", value: user.email || "-" },
-        { label: "Department", value: user.department || "-" },
-        { label: "Designation", value: user.designation || "-" },
-        { label: "Branch/City", value: user.branch ? `${user.branch}${user.city ? `, ${user.city}` : ""}` : user.city || "-" },
+        { label: "Name", value: recordUser.fullName || "-" },
+        { label: "Employee ID", value: recordUser.employeeId ?? "-" },
+        { label: "Email", value: recordUser.email || "-" },
+        { label: "Department", value: recordUser.department || "-" },
+        { label: "Designation", value: recordUser.designation || "-" },
+        { label: "Branch/City", value: recordUser.branch ? `${recordUser.branch}${recordUser.city ? `, ${recordUser.city}` : ""}` : recordUser.city || "-" },
       ];
 
       const allItems = result.items || [];
@@ -235,7 +243,8 @@ export default function FuelRequisitionReport() {
         const colRate = 16;
         const colAmount = 22;
         const colStatus = 24;
-        const colDesc = Math.max(40, contentWidth - (colSr + colKm + colRate + colAmount + colStatus));
+        const descMinWidth = layout.descMinWidth ?? 40;
+        const colDesc = Math.max(descMinWidth, contentWidth - (colSr + colKm + colRate + colAmount + colStatus));
 
         const footRow = verifiedItems.length
           ? [[ "", "Verified totals", totalsKm.toLocaleString(), "", totalsAmount.toLocaleString(), `${verifiedItems.length}/${allItems.length} verified` ]]
@@ -285,33 +294,42 @@ export default function FuelRequisitionReport() {
         });
 
         const tableBottom = pdf.lastAutoTable?.finalY ?? cursorY;
-        const metaTopLimit = pageHeight - 18 - 8;
+        const metaTopLimit = pageHeight - 18 - 6;
         let metaCursorY = Math.min(tableBottom + 3, metaTopLimit);
 
-        if (metaCursorY <= metaTopLimit) {
-          pdf.setFont("helvetica", "italic");
-          pdf.setFontSize(layout.noteFont);
-          pdf.setTextColor(...textMuted);
-          pdf.text("Totals reflect only verified line items.", margin, metaCursorY);
-          pdf.setTextColor(...primaryText);
-          metaCursorY += 3;
-        }
+        const reserveMetaLine = (spacing = 3) => {
+          const y = metaCursorY;
+          metaCursorY = Math.min(metaCursorY + spacing, metaTopLimit);
+          return y;
+        };
 
-        if (metaCursorY <= metaTopLimit) {
+        const noteY = reserveMetaLine(3);
+        pdf.setFont("helvetica", "italic");
+        pdf.setFontSize(layout.noteFont);
+        pdf.setTextColor(...textMuted);
+        pdf.text("Totals reflect only verified line items.", margin, noteY);
+        pdf.setTextColor(...primaryText);
+
+        const generatedY = reserveMetaLine(3);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(layout.subFont);
+        pdf.setTextColor(...textMuted);
+        const generatorName = authUser?.fullName || recordUser.fullName || "-";
+        const generatedLabel = `Generated by: ${generatorName}`;
+        pdf.text(generatedLabel, margin, generatedY);
+
+        const created = result.createdAt
+          ? `Created: ${new Date(result.createdAt).toLocaleString()}`
+          : "Created: -";
+        pdf.text(created, pageWidth - margin - pdf.getTextWidth(created), generatedY);
+        pdf.setTextColor(...primaryText);
+
+        if (result.remarks && metaCursorY < metaTopLimit - 1) {
+          const remarksY = reserveMetaLine(2.8);
+          const remarks = pdf.splitTextToSize(`Remarks: ${result.remarks}`, contentWidth);
           pdf.setFont("helvetica", "normal");
           pdf.setFontSize(layout.subFont);
-          const created = result.createdAt
-            ? `Created: ${new Date(result.createdAt).toLocaleString()}`
-            : "Created: -";
-          pdf.setTextColor(...textMuted);
-          pdf.text(created, pageWidth - margin - pdf.getTextWidth(created), metaCursorY);
-          pdf.setTextColor(...primaryText);
-          metaCursorY += 3.5;
-        }
-
-        if (result.remarks && metaCursorY <= metaTopLimit) {
-          pdf.setFontSize(layout.subFont);
-          pdf.text(`Remarks: ${result.remarks}`, margin, metaCursorY, { maxWidth: contentWidth });
+          pdf.text(remarks, margin, remarksY, { maxWidth: contentWidth });
         }
 
         pdf.setFont("helvetica", "bold");
@@ -328,8 +346,13 @@ export default function FuelRequisitionReport() {
       };
 
       const startingIndex = (() => {
-        if (allItems.length > 30) return 2;
-        if (allItems.length > 20) return 1;
+        const count = allItems.length;
+        if (count > 60) return 6;
+        if (count > 50) return 5;
+        if (count > 42) return 4;
+        if (count > 34) return 3;
+        if (count > 26) return 2;
+        if (count > 18) return 1;
         return 0;
       })();
 
